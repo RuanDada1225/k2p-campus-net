@@ -31,7 +31,9 @@ export K2P_LAN_SUBNET=192.168.1.0/24
 | 7 | `41-set-timezone.sh` | 时区 + 国内 NTP 源（shell，路由器上执行） | —— |
 | 8 | `50-fix-5g-channel.sh` | 5G 固定到非 DFS 信道 149（shell） | —— |
 | 9 | `60-install-extra-apps.sh` | 装 nlbwmon / watchcat 并调探测目标（shell） | 已配好软件源 |
-| 10 | `90-verify-ua-length.py` | 批量验证 UA 改写覆盖范围（PC 上执行） | 步骤 1-2 完成 |
+| 10 | `70-set-static-ip.py` | 静态 DHCP 保留，给常用设备固定 IP | —— |
+| 11 | `71-set-rdp-portforward.py` | RDP 端口转发（外网远程桌面连内网电脑） | 步骤 10 完成 |
+| 12 | `90-verify-ua-length.py` | 批量验证 UA 改写覆盖范围（PC 上执行） | 步骤 1-2 完成 |
 
 > 带 `.sh` 的是**路由器端**脚本，用 `scp` 传上去或直接 `ssh root@路由器 'sh -s' < xxx.sh` 执行。
 > 带 `.py` 的是**本机**脚本，通过 paramiko 远程执行。
@@ -44,4 +46,6 @@ export K2P_LAN_SUBNET=192.168.1.0/24
 
 - `11-patch-ua2f-lan-only.py` 会先备份 `/etc/init.d/ua2f` 到 `.orig`。
 - `40-tune-rmem.py` 会修改 `/etc/sysctl.conf` 并重启 ua2f。
+- `70-set-static-ip.py` / `71-set-rdp-portforward.py` 里的设备清单（名称/MAC/IP/端口）
+  都是**示例占位**，执行前必须改成自己的；两者都是幂等的，可重复执行。
 - 这些脚本修改的是路由器**运行时 + 开机脚本**，确保重启后仍然生效。

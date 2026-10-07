@@ -79,6 +79,13 @@ python scripts/41-set-timezone.sh            # 时区 + 国内 NTP 源
 python scripts/50-fix-5g-channel.sh          # 5G 固定到非 DFS 信道 149
 ```
 
+以上是「让路由器跑起来」。跑起来之后，按实际需求可选：
+
+```bash
+python scripts/70-set-static-ip.py           # 给常用设备固定 IP（改 DEVICES 后再执行）
+python scripts/71-set-rdp-portforward.py     # 外网远程桌面连内网电脑（改 DEVICES 后再执行）
+```
+
 详细的原理、每一步的验证方法、以及我踩过的坑，见下方文档。
 
 ---
@@ -93,7 +100,8 @@ k2p-campus-net/
 │   ├── 01-检测原理.md             # 运营商是怎么检测多设备的
 │   ├── 02-部署实战.md             # 逐层部署的完整步骤与命令
 │   ├── 03-踩坑与排错.md           # 实战中踩过的坑与解决办法
-│   └── 04-验证与运维.md           # 如何验证生效 + 日常运维
+│   ├── 04-验证与运维.md           # 如何验证生效 + 日常运维
+│   └── 05-固定IP与远程访问.md      # 静态 DHCP 保留 + 端口转发（RDP）
 └── scripts/
     ├── README.md                 # 脚本清单与执行顺序
     ├── common/ssh_helper.py      # 通用 SSH 封装（凭据走环境变量）
@@ -106,6 +114,8 @@ k2p-campus-net/
     ├── 41-set-timezone.sh
     ├── 50-fix-5g-channel.sh
     ├── 60-install-extra-apps.sh
+    ├── 70-set-static-ip.py
+    ├── 71-set-rdp-portforward.py
     └── 90-verify-ua-length.py
 ```
 
@@ -125,6 +135,9 @@ k2p-campus-net/
 | 8 | **apk 语言包版本被锁** | `/etc/apk/world` 里有版本哈希，`apk upgrade` 会跳过，要用 `apk add --upgrade` |
 | 9 | **K2P 无线功率是驱动硬限制** | 2.4G/5G 都被驱动钳在 8dBm，改国家码无效，只能重编译驱动 |
 | 10 | **日志在 tmpfs** | `/var/log` 存内存，重启即清空，历史日志无法回溯 |
+| 11 | **固定 IP 要「保留 + 收窄地址池」** | 保留地址必须落在动态池之外，否则会撞车 |
+| 12 | **判断在线看 ARP，不看租约** | 租约到期前不会因设备断开而消失 |
+| 13 | **远程访问优先用 VPN** | 直接暴露 3389 是常见入侵入口，能上 VPN 就别开转发 |
 
 ---
 
