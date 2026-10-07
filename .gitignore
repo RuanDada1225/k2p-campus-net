@@ -1,0 +1,22 @@
+# 凭据 / 本地配置，绝不提交
+.env
+*.env
+credentials*
+secrets*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 抓包 / 日志 / 导出
+*.pcap
+*.cap
+*.log
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
