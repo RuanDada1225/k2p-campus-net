@@ -76,6 +76,7 @@ python scripts/21-setup-ntp-redirect.py      # 强制内网 NTP 走路由器
 python scripts/30-patch-esurfing-bootdelay.py# 认证开机延迟 30s（避免 WAN 未就绪）
 python scripts/40-tune-rmem.py               # 内核 socket 缓冲调优（消除 UA2F 报错）
 python scripts/41-set-timezone.sh            # 时区 + 国内 NTP 源
+python scripts/42-fix-dns-rebind.py          # 关闭 DNS 反重绑定保护（修复校内站点打不开）
 python scripts/50-fix-5g-channel.sh          # 5G 固定到非 DFS 信道 149
 ```
 
@@ -112,6 +113,7 @@ k2p-campus-net/
     ├── 30-patch-esurfing-bootdelay.py
     ├── 40-tune-rmem.py
     ├── 41-set-timezone.sh
+    ├── 42-fix-dns-rebind.py
     ├── 50-fix-5g-channel.sh
     ├── 60-install-extra-apps.sh
     ├── 70-set-static-ip.py
@@ -138,6 +140,7 @@ k2p-campus-net/
 | 11 | **固定 IP 要「保留 + 收窄地址池」** | 保留地址必须落在动态池之外，否则会撞车 |
 | 12 | **判断在线看 ARP，不看租约** | 租约到期前不会因设备断开而消失 |
 | 13 | **远程访问优先用 VPN** | 直接暴露 3389 是常见入侵入口，能上 VPN 就别开转发 |
+| 14 | **校内站点打不开，先查 DNS 反重绑定** | dnsmasq 默认丢弃「公网域名→私有 IP」的应答，会误伤校内系统 |
 
 ---
 

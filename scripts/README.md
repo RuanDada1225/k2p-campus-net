@@ -29,11 +29,12 @@ export K2P_LAN_SUBNET=192.168.1.0/24
 | 5 | `30-patch-esurfing-bootdelay.py` | 认证开机延迟 5s → 30s | 已装 esurfingclient |
 | 6 | `40-tune-rmem.py` | 内核 socket 缓冲调优，消除 UA2F 报错 | 步骤 1 完成 |
 | 7 | `41-set-timezone.sh` | 时区 + 国内 NTP 源（shell，路由器上执行） | —— |
-| 8 | `50-fix-5g-channel.sh` | 5G 固定到非 DFS 信道 149（shell） | —— |
-| 9 | `60-install-extra-apps.sh` | 装 nlbwmon / watchcat 并调探测目标（shell） | 已配好软件源 |
-| 10 | `70-set-static-ip.py` | 静态 DHCP 保留，给常用设备固定 IP | —— |
-| 11 | `71-set-rdp-portforward.py` | RDP 端口转发（外网远程桌面连内网电脑） | 步骤 10 完成 |
-| 12 | `90-verify-ua-length.py` | 批量验证 UA 改写覆盖范围（PC 上执行） | 步骤 1-2 完成 |
+| 8 | `42-fix-dns-rebind.py` | 关闭 dnsmasq 反重绑定保护，修复校内站点打不开 | —— |
+| 9 | `50-fix-5g-channel.sh` | 5G 固定到非 DFS 信道 149（shell） | —— |
+| 10 | `60-install-extra-apps.sh` | 装 nlbwmon / watchcat 并调探测目标（shell） | 已配好软件源 |
+| 11 | `70-set-static-ip.py` | 静态 DHCP 保留，给常用设备固定 IP | —— |
+| 12 | `71-set-rdp-portforward.py` | RDP 端口转发（外网远程桌面连内网电脑） | 步骤 11 完成 |
+| 13 | `90-verify-ua-length.py` | 批量验证 UA 改写覆盖范围（PC 上执行） | 步骤 1-2 完成 |
 
 > 带 `.sh` 的是**路由器端**脚本，用 `scp` 传上去或直接 `ssh root@路由器 'sh -s' < xxx.sh` 执行。
 > 带 `.py` 的是**本机**脚本，通过 paramiko 远程执行。
