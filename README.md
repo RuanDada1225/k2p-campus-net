@@ -142,7 +142,7 @@ k2p-campus-net/
 | 1 | **UA3F 装不下，用 UA2F** | K2P overlay 仅 7.6MB，UA3F 要 17.6MB；UA2F 主程序仅 758KB |
 | 2 | **UA2F 必须限制只处理 br-lan** | 否则会改写路由器自身的认证流量，导致「提取门户配置失败」 |
 | 3 | **UA2F 是等长替换** | `custom_ua` 越短覆盖越广；用 `Mozilla`(7B) 可覆盖 ≥7 字符的原始 UA |
-| 4 | **认证要延迟 30s 启动** | 开机 5s 时 WAN 还没就绪，认证失败会进入 5 分钟退避 |
+| 4 | **认证要延迟 30s 启动** | 开机 5s 时 WAN 还没就绪，认证失败会进入最长 30 分钟的退避 |
 | 5 | **5G 要固定非 DFS 信道** | `auto` 会选到 DFS 信道 56，触发 60s CAC，重启后 70s 没网 |
 | 6 | **rmem 要调大** | 默认 176KB（180224B）会导致 UA2F netlink socket 溢出报 `No buffer space available` |
 | 7 | **独立 nft 表更稳** | `ttl_normalize` / `ntp_redirect` 用独立表，不会被 fw4 或 UA2F 重启清掉 |
