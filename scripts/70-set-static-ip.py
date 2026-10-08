@@ -49,8 +49,10 @@ uci show dhcp 2>/dev/null | grep -E 'host\[[0-9]+\]\.(name|mac|ip)' || echo '(�
 echo
 echo '=== 删除同名旧保留（保证幂等） ==='
 for name in __NAMES__; do
-    for idx in $(uci show dhcp 2>/dev/null \
-                 | sed -n "s/^dhcp\.\(host\[[0-9]*\]\)\.name='$name'\$/\1/p"); do
+    while :; do
+        idx=$(uci show dhcp 2>/dev/null \
+              | sed -n "s/^dhcp\.\(@host\[[0-9]*\]\)\.name='$name'\$/\1/p" | head -1)
+        [ -n "$idx" ] || break
         uci -q delete "dhcp.$idx"
         echo "deleted dhcp.$idx  ($name)"
     done

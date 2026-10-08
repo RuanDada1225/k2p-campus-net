@@ -57,5 +57,6 @@ echo "=== 安装后空间 ==="
 df -h /overlay | tail -1
 
 echo
-echo "提示：zram 默认按内存一半大小创建交换分区。若要调整大小/算法，"
-echo "      可编辑 /etc/config/zram 后 /etc/init.d/zram restart。"
+echo "提示：zram 默认按内存一半创建交换分区。若要调整大小，改的是 uci 里的"
+echo "      system.@system[0].zram_size_mb（单位 MiB），改完 /etc/init.d/zram restart。"
+echo "      注意：本包没有 /etc/config/zram，别去找那个文件。"

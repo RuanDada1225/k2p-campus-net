@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """40 · 内核 socket 缓冲调优，消除 UA2F 的 conntrack 报错。
 
-问题：默认 net.core.rmem_max 只有约 180KB，UA2F 的 netlink socket
+问题：默认 net.core.rmem_max 只有 176KB（180224 字节），UA2F 的 netlink socket
       接收缓冲溢出，反复报：
         Conntrack catch error: No buffer space available
       （该报错只影响事件通知，不影响数据面包改写，但会刷屏）

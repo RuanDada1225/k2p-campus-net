@@ -71,22 +71,24 @@ export K2P_USER=root
 export K2P_PASSWORD='你的路由器密码'
 
 # 2. 按顺序执行（每个脚本都会自检并打印结果）
+#    .py 在本机跑（通过 SSH 操作路由器）；.sh 是路由器端脚本，用 ssh 直接喂进去
 python scripts/10-setup-ua2f.py              # 装 UA2F 并配置 UA 改写
 python scripts/11-patch-ua2f-lan-only.py     # 让 UA2F 只处理 br-lan 流量（关键！）
 python scripts/20-setup-ttl-normalize.py     # TTL / HopLimit 归一化
 python scripts/21-setup-ntp-redirect.py      # 强制内网 NTP 走路由器
-python scripts/30-patch-esurfing-bootdelay.py# 认证开机延迟 30s（避免 WAN 未就绪）
+python scripts/30-patch-esurfing-bootdelay.py # 认证开机延迟 30s（避免 WAN 未就绪）
 python scripts/40-tune-rmem.py               # 内核 socket 缓冲调优（消除 UA2F 报错）
-python scripts/41-set-timezone.sh            # 时区 + 国内 NTP 源
+ssh root@192.168.1.1 'sh -s' < scripts/41-set-timezone.sh      # 时区 + 国内 NTP 源
 python scripts/42-fix-dns-rebind.py          # 关闭 DNS 反重绑定保护（修复校内站点打不开）
 python scripts/43-optimize-dns-ipv6.py       # DNS 分流 + AAAA 过滤 + 关 LAN IPv6（修复刷视频缓冲）
 python scripts/44-setup-esurfing-watchdog.py # 认证失败加速重试（约 1 分钟）
-python scripts/50-fix-5g-channel.sh          # 5G 固定到非 DFS 信道 149
+ssh root@192.168.1.1 'sh -s' < scripts/50-fix-5g-channel.sh    # 5G 固定到非 DFS 信道 149
 ```
 
 以上是「让路由器跑起来」。跑起来之后，按实际需求可选：
 
 ```bash
+ssh root@192.168.1.1 'sh -s' < scripts/60-install-extra-apps.sh  # nlbwmon 流量统计 / watchcat 断网自愈
 python scripts/70-set-static-ip.py           # 给常用设备固定 IP（改 DEVICES 后再执行）
 python scripts/71-set-rdp-portforward.py     # 外网远程桌面连内网电脑（改 DEVICES 后再执行）
 ssh root@192.168.1.1 'sh -s' < scripts/80-install-zram.sh   # zram 压缩交换（防内存盘耗尽重启）
@@ -131,7 +133,9 @@ k2p-campus-net/
 
 ---
 
-## 关键结论 / 踩坑速查
+## 关键结论速查（17 条）
+
+> 跨文档汇总的结论清单，与 `docs/03-踩坑与排错.md` 里的 16 条踩坑并非一一对应。
 
 | # | 结论 | 说明 |
 |---|---|---|
@@ -140,7 +144,7 @@ k2p-campus-net/
 | 3 | **UA2F 是等长替换** | `custom_ua` 越短覆盖越广；用 `Mozilla`(7B) 可覆盖 ≥7 字符的原始 UA |
 | 4 | **认证要延迟 30s 启动** | 开机 5s 时 WAN 还没就绪，认证失败会进入 5 分钟退避 |
 | 5 | **5G 要固定非 DFS 信道** | `auto` 会选到 DFS 信道 56，触发 60s CAC，重启后 70s 没网 |
-| 6 | **rmem 要调大** | 默认 180KB 会导致 UA2F netlink socket 溢出报 `No buffer space available` |
+| 6 | **rmem 要调大** | 默认 176KB（180224B）会导致 UA2F netlink socket 溢出报 `No buffer space available` |
 | 7 | **独立 nft 表更稳** | `ttl_normalize` / `ntp_redirect` 用独立表，不会被 fw4 或 UA2F 重启清掉 |
 | 8 | **apk 语言包版本被锁** | `/etc/apk/world` 里有版本哈希，`apk upgrade` 会跳过，要用 `apk add --upgrade` |
 | 9 | **K2P 无线功率是驱动硬限制** | 2.4G/5G 都被驱动钳在 8dBm，改国家码无效，只能重编译驱动 |
