@@ -1,0 +1,15 @@
+# 统一行尾为 LF：无论 core.autocrlf 如何设置，索引与工作区都强制 LF。
+# 原因：仓库内含 .sh 脚本，需通过 `ssh root@... 'sh -s' < scripts/xx.sh` 喂给路由器执行；
+# 若被检出为 CRLF，变量赋值会混入 \r，导致比较/路径判断失效（见 docs/03）。
+* text=auto eol=lf
+
+# 显式声明二进制类型，避免被当作文本转换
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.zip  binary
+*.gz   binary
+*.tar  binary
+*.bin  binary
