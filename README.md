@@ -7,7 +7,7 @@
 > 认证：天翼校园网 ESurfingClient
 > 反检测：UA2F + TTL 归一化 + NTP 重定向
 >
-> 内容：5 篇文档 · 13 个可复用脚本 · 13 条实战踩坑（现象 → 定位 → 根因 → 解决）
+> 内容：5 篇文档 · 16 个可复用脚本 · 17 条实战踩坑（现象 → 定位 → 根因 → 解决）
 
 ---
 
@@ -79,6 +79,8 @@ python scripts/30-patch-esurfing-bootdelay.py# 认证开机延迟 30s（避免 W
 python scripts/40-tune-rmem.py               # 内核 socket 缓冲调优（消除 UA2F 报错）
 python scripts/41-set-timezone.sh            # 时区 + 国内 NTP 源
 python scripts/42-fix-dns-rebind.py          # 关闭 DNS 反重绑定保护（修复校内站点打不开）
+python scripts/43-optimize-dns-ipv6.py       # DNS 分流 + AAAA 过滤 + 关 LAN IPv6（修复刷视频缓冲）
+python scripts/44-setup-esurfing-watchdog.py # 认证失败加速重试（约 1 分钟）
 python scripts/50-fix-5g-channel.sh          # 5G 固定到非 DFS 信道 149
 ```
 
@@ -87,6 +89,7 @@ python scripts/50-fix-5g-channel.sh          # 5G 固定到非 DFS 信道 149
 ```bash
 python scripts/70-set-static-ip.py           # 给常用设备固定 IP（改 DEVICES 后再执行）
 python scripts/71-set-rdp-portforward.py     # 外网远程桌面连内网电脑（改 DEVICES 后再执行）
+ssh root@192.168.1.1 'sh -s' < scripts/80-install-zram.sh   # zram 压缩交换（防内存盘耗尽重启）
 ```
 
 详细的原理、每一步的验证方法、以及我踩过的坑，见下方文档。
@@ -116,10 +119,13 @@ k2p-campus-net/
     ├── 40-tune-rmem.py
     ├── 41-set-timezone.sh
     ├── 42-fix-dns-rebind.py
+    ├── 43-optimize-dns-ipv6.py
+    ├── 44-setup-esurfing-watchdog.py
     ├── 50-fix-5g-channel.sh
     ├── 60-install-extra-apps.sh
     ├── 70-set-static-ip.py
     ├── 71-set-rdp-portforward.py
+    ├── 80-install-zram.sh
     └── 90-verify-ua-length.py
 ```
 
@@ -143,6 +149,10 @@ k2p-campus-net/
 | 12 | **判断在线看 ARP，不看租约** | 租约到期前不会因设备断开而消失 |
 | 13 | **远程访问优先用 VPN** | 直接暴露 3389 是常见入侵入口，能上 VPN 就别开转发 |
 | 14 | **校内站点打不开，先查 DNS 反重绑定** | dnsmasq 默认丢弃「公网域名→私有 IP」的应答，会误伤校内系统 |
+| 15 | **刷视频先卡几秒，先查 IPv6 假阳性** | LAN 广播 IPv6 而 WAN 无上游；关 RA/DHCPv6 + `filter_aaaa=1` + DNS 分流 |
+| 16 | **莫名重启，先查 tmpfs 内存盘** | tmpfs 页不可回收，无 swap 时内核卡死被硬件看门狗复位；加 zram 泄洪 |
+| 17 | **认证失败要等好几分钟** | 退避表硬编码 `{1,5,10,20,30}` 分钟；外部守护脚本 + cron 压到约 1 分钟 |
+| 18 | **能 ping 通却连不上端口** | 对端（手机）WiFi 省电休眠时丢弃入站 TCP；设「睡眠保持 WLAN」或先唤醒 |
 
 ---
 
