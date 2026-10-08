@@ -104,6 +104,7 @@ ssh root@192.168.1.1 'sh -s' < scripts/80-install-zram.sh   # zram 压缩交换�
 k2p-campus-net/
 ├── README.md                     # 本文件：总览与快速开始
 ├── LICENSE                       # MIT
+├── .gitignore                    # 忽略凭据 / 日志
 ├── docs/
 │   ├── 01-检测原理.md             # 运营商是怎么检测多设备的
 │   ├── 02-部署实战.md             # 逐层部署的完整步骤与命令
