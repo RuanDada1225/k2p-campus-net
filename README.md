@@ -7,7 +7,7 @@
 > 认证：天翼校园网 ESurfingClient
 > 反检测：UA2F + TTL 归一化 + NTP 重定向
 >
-> 内容：5 篇文档 · 16 个可复用脚本 · 16 条实战踩坑（现象 → 定位 → 根因 → 解决）
+> 内容：6 篇文档 · 18 个可复用脚本 · 18 条实战踩坑（现象 → 定位 → 根因 → 解决）
 
 ---
 
@@ -74,6 +74,7 @@ export K2P_PASSWORD='你的路由器密码'
 #    .py 在本机跑（通过 SSH 操作路由器）；.sh 是路由器端脚本，用 ssh 直接喂进去
 python scripts/10-setup-ua2f.py              # 装 UA2F 并配置 UA 改写
 python scripts/11-patch-ua2f-lan-only.py     # 让 UA2F 只处理 br-lan 流量（关键！）
+python scripts/12-patch-ua2f-ack-bypass.py   # 满速下载不卡：UA2F 跳过纯 ACK 短包
 python scripts/20-setup-ttl-normalize.py     # TTL / HopLimit 归一化
 python scripts/21-setup-ntp-redirect.py      # 强制内网 NTP 走路由器
 python scripts/30-patch-esurfing-bootdelay.py # 认证开机延迟 30s（避免 WAN 未就绪）
@@ -82,6 +83,7 @@ ssh root@192.168.1.1 'sh -s' < scripts/41-set-timezone.sh      # 时区 + 国内
 python scripts/42-fix-dns-rebind.py          # 关闭 DNS 反重绑定保护（修复校内站点打不开）
 python scripts/43-optimize-dns-ipv6.py       # DNS 分流 + AAAA 过滤 + 关 LAN IPv6（修复刷视频缓冲）
 python scripts/44-setup-esurfing-watchdog.py # 认证失败加速重试（约 1 分钟）
+python scripts/45-set-rps-masks.py           # 满速下载不丢包：RPS 多核分散（关键）
 ssh root@192.168.1.1 'sh -s' < scripts/50-fix-5g-channel.sh    # 5G 固定到非 DFS 信道 149
 ```
 
@@ -94,7 +96,7 @@ python scripts/71-set-rdp-portforward.py     # 外网远程桌面连内网电脑
 ssh root@192.168.1.1 'sh -s' < scripts/80-install-zram.sh   # zram 压缩交换（防内存盘耗尽重启）
 ```
 
-详细的原理、每一步的验证方法、以及我踩过的坑，见下方文档。
+详细的原理、每一步的验证方法、以及我踩过的坑，见下方文档；性能调优（满速下载不卡顿）另见 `docs/06-CPU与收包性能调优.md`。
 
 ---
 
@@ -110,12 +112,14 @@ k2p-campus-net/
 │   ├── 02-部署实战.md             # 逐层部署的完整步骤与命令
 │   ├── 03-踩坑与排错.md           # 实战中踩过的坑与解决办法
 │   ├── 04-验证与运维.md           # 如何验证生效 + 日常运维
-│   └── 05-固定IP与远程访问.md      # 静态 DHCP 保留 + 端口转发（RDP）
+│   ├── 05-固定IP与远程访问.md      # 静态 DHCP 保留 + 端口转发（RDP）
+│   └── 06-CPU与收包性能调优.md     # UA2F 短包旁路 + RPS 多核分散（满速下载不卡）
 └── scripts/
     ├── README.md                 # 脚本清单与执行顺序
     ├── common/ssh_helper.py      # 通用 SSH 封装（凭据走环境变量）
     ├── 10-setup-ua2f.py
     ├── 11-patch-ua2f-lan-only.py
+    ├── 12-patch-ua2f-ack-bypass.py
     ├── 20-setup-ttl-normalize.py
     ├── 21-setup-ntp-redirect.py
     ├── 30-patch-esurfing-bootdelay.py
@@ -124,6 +128,7 @@ k2p-campus-net/
     ├── 42-fix-dns-rebind.py
     ├── 43-optimize-dns-ipv6.py
     ├── 44-setup-esurfing-watchdog.py
+    ├── 45-set-rps-masks.py
     ├── 50-fix-5g-channel.sh
     ├── 60-install-extra-apps.sh
     ├── 70-set-static-ip.py
@@ -134,9 +139,9 @@ k2p-campus-net/
 
 ---
 
-## 关键结论速查（17 条）
+## 关键结论速查（19 条）
 
-> 跨文档汇总的结论清单，与 `docs/03-踩坑与排错.md` 里的 16 条踩坑并非一一对应。
+> 跨文档汇总的结论清单，与 `docs/03-踩坑与排错.md` 里的 18 条踩坑并非一一对应。
 
 | # | 结论 | 说明 |
 |---|---|---|
@@ -157,6 +162,8 @@ k2p-campus-net/
 | 15 | **刷视频先卡几秒，先查 IPv6 假阳性** | LAN 广播 IPv6 而 WAN 无上游；关 RA/DHCPv6 + `filter_aaaa=1` + DNS 分流 |
 | 16 | **莫名重启，先查 tmpfs 内存盘** | tmpfs 页不可回收，无 swap 时内核卡死被硬件看门狗复位；加 zram 泄洪 |
 | 17 | **认证失败要等好几分钟** | 退避表硬编码 `{1,5,10,20,30}` 分钟；外部守护脚本 + cron 压到约 1 分钟 |
+| 18 | **UA2F 要跳过纯 ACK 短包** | 下载流几乎全是无负载 ACK；`ip length 1-80` / `ip6 length 1-104` return 后队列 3100 → 10~16 包/秒 |
+| 19 | **packet steering 会覆盖 RPS** | 它按「最空闲核」写单核 `rps_cpus`，且 network / firewall reload 后自动重跑；必须钩在它之后 |
 
 ---
 
