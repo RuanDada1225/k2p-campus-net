@@ -18,7 +18,9 @@
 a) 关闭 LAN 侧 IPv6 RA + DHCPv6（WAN 无 IPv6 上游时不该向内网广播 IPv6）
 b) dnsmasq `filter_aaaa=1`：不返回 AAAA 记录，客户端直接用 IPv4
 c) dnsmasq `noresolv=1` + 分流：
-     默认外部域名走公共 DNS（223.5.5.5 / 119.29.29.29）
+     默认外部域名走公共 DNS（223.5.5.5 / 119.29.29.29）；
+     实测提示：就近的运营商 DNS 更快（校园电信线路 10.8ms vs 公共 15~17.5ms），
+     部署后建议把默认上游换成本线路运营商 DNS
      校内域名（CAMPUS_DOMAINS）定向到校园 DNS（CAMPUS_DNS）
 
 用法
