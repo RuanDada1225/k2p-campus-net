@@ -7,7 +7,7 @@
 > 认证：天翼校园网 ESurfingClient
 > 反检测：UA2F + TTL 归一化 + NTP 重定向
 >
-> 内容：6 篇文档 · 18 个可复用脚本 · 18 条实战踩坑（现象 → 定位 → 根因 → 解决）
+> 内容：7 篇文档 · 19 个可复用脚本 · 19 条实战踩坑（现象 → 定位 → 根因 → 解决）
 
 ---
 
@@ -94,9 +94,10 @@ ssh root@192.168.1.1 'sh -s' < scripts/60-install-extra-apps.sh  # nlbwmon 流�
 python scripts/70-set-static-ip.py           # 给常用设备固定 IP（改 DEVICES 后再执行）
 python scripts/71-set-rdp-portforward.py     # 外网远程桌面连内网电脑（改 DEVICES 后再执行）
 ssh root@192.168.1.1 'sh -s' < scripts/80-install-zram.sh   # zram 压缩交换（防内存盘耗尽重启）
+ssh root@192.168.1.1 'sh -s' < scripts/46-setup-dns-adblock.sh  # DNS 层去广告（网页广告/统计域名）
 ```
 
-详细的原理、每一步的验证方法、以及我踩过的坑，见下方文档；性能调优（满速下载不卡顿）另见 `docs/06-CPU与收包性能调优.md`。
+详细的原理、每一步的验证方法、以及我踩过的坑，见下方文档；性能调优（满速下载不卡顿）另见 `docs/06-CPU与收包性能调优.md`；DNS 层去广告见 `docs/07-DNS去广告.md`。
 
 ---
 
@@ -114,7 +115,8 @@ k2p-campus-net/
 │   ├── 03-踩坑与排错.md           # 实战中踩过的坑与解决办法
 │   ├── 04-验证与运维.md           # 如何验证生效 + 日常运维
 │   ├── 05-固定IP与远程访问.md      # 静态 DHCP 保留 + 端口转发（RDP）
-│   └── 06-CPU与收包性能调优.md     # UA2F 短包旁路 + RPS 多核分散（满速下载不卡）
+│   ├── 06-CPU与收包性能调优.md     # UA2F 短包旁路 + RPS 多核分散（满速下载不卡）
+│   └── 07-DNS去广告.md            # dnsmasq addn-hosts 去广告 + 每周自动更新
 └── scripts/
     ├── README.md                 # 脚本清单与执行顺序
     ├── common/ssh_helper.py      # 通用 SSH 封装（凭据走环境变量）
@@ -130,6 +132,7 @@ k2p-campus-net/
     ├── 43-optimize-dns-ipv6.py
     ├── 44-setup-esurfing-watchdog.py
     ├── 45-set-rps-masks.py
+    ├── 46-setup-dns-adblock.sh
     ├── 50-fix-5g-channel.sh
     ├── 60-install-extra-apps.sh
     ├── 70-set-static-ip.py
@@ -140,9 +143,9 @@ k2p-campus-net/
 
 ---
 
-## 关键结论速查（20 条）
+## 关键结论速查（21 条）
 
-> 跨文档汇总的结论清单，与 `docs/03-踩坑与排错.md` 里的 18 条踩坑并非一一对应。
+> 跨文档汇总的结论清单，与 `docs/03-踩坑与排错.md` 里的 19 条踩坑并非一一对应。
 
 | # | 结论 | 说明 |
 |---|---|---|
@@ -166,6 +169,7 @@ k2p-campus-net/
 | 18 | **UA2F 要跳过纯 ACK 短包** | 下载流几乎全是无负载 ACK；`ip length 1-80` / `ip6 length 1-104` return 后队列 3100 → 10~16 包/秒 |
 | 19 | **packet steering 会覆盖 RPS** | 它按「最空闲核」写单核 `rps_cpus`，且 network / firewall reload 后自动重跑；必须钩在它之后 |
 | 20 | **DNS 上游按线路就近选** | 公共 DNS 不是万金油：实测运营商 DNS 10.8ms 快于阿里 15.0ms / 腾讯 17.5ms，CDN 解析也更近 |
+| 21 | **DNS 去广告清单别贪大** | 10.9 万条 ≈13MB 内存 + 0.94MB overlay；清单按字母序排，裁剪要用等间隔抽样而不是 `head` 截断 |
 
 ---
 

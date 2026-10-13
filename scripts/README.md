@@ -40,6 +40,7 @@ export K2P_LAN_SUBNET=192.168.1.0/24
 | 16 | `71-set-rdp-portforward.py` | RDP 端口转发（外网远程桌面连内网电脑） | 步骤 15 完成 |
 | 17 | `80-install-zram.sh` | 安装 zram 压缩交换，防止内存盘耗尽导致重启（shell） | 软件源可用 |
 | 18 | `90-verify-ua-length.py` | 批量验证 UA 改写覆盖范围（PC 上执行） | 步骤 1-2 完成 |
+| 19 | `46-setup-dns-adblock.sh` | **可选**：DNS 层去广告（dnsmasq addn-hosts）+ 每周自动更新（shell） | 步骤 10 完成；固件自带 uclient-fetch |
 
 > 带 `.sh` 的是**路由器端**脚本，用 `scp` 传上去或直接 `ssh root@路由器 'sh -s' < xxx.sh` 执行。
 > 带 `.py` 的是**本机**脚本，通过 paramiko 远程执行。
@@ -58,6 +59,10 @@ export K2P_LAN_SUBNET=192.168.1.0/24
 - `45-set-rps-masks.py` 会部署 `/usr/bin/rps-tuning.sh`、修改 `/etc/rc.local`，并给
   `/etc/init.d/packet_steering` 挂勾子（备份 `.orig`）以压住它的自动覆盖，
   详见 `docs/06-CPU与收包性能调优.md`。
+- `46-setup-dns-adblock.sh` 会部署 `/usr/bin/dns-adblock-update.sh` 与
+  `/etc/dns-blocklist.hosts`，并往 `/etc/crontabs/root` 追加一条每周更新任务；
+  默认把清单裁剪到 6 万条（等间隔抽样），可设 `AB_MAX_LINES=0` 用全量。
+  详见 `docs/07-DNS去广告.md`。
 - `70-set-static-ip.py` / `71-set-rdp-portforward.py` 里的设备清单（名称/MAC/IP/端口）
   都是**示例占位**，执行前必须改成自己的；两者都是幂等的，可重复执行。
 - **不要启用 flow offload**：被 offload 的流量绕过 mangle/postrouting，TTL 归一化与 UA2F 会失效。
