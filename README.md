@@ -143,15 +143,15 @@ k2p-campus-net/
 
 ---
 
-## 关键结论速查（21 条）
+## 关键结论速查（22 条）
 
-> 跨文档汇总的结论清单，与 `docs/03-踩坑与排错.md` 里的 19 条踩坑并非一一对应。
+> 跨文档汇总的结论清单，与 `docs/03-踩坑与排错.md` 里的 20 条踩坑并非一一对应。
 
 | # | 结论 | 说明 |
 |---|---|---|
 | 1 | **UA3F 装不下，用 UA2F** | K2P overlay 仅 7.6MB，UA3F 要 17.6MB；UA2F 主程序仅 758KB |
 | 2 | **UA2F 必须限制只处理 br-lan** | 否则会改写路由器自身的认证流量，导致「提取门户配置失败」 |
-| 3 | **UA2F 是等长替换** | `custom_ua` 越短覆盖越广；用 `Mozilla`(7B) 可覆盖 ≥7 字符的原始 UA |
+| 3 | **UA2F 是等长替换，且 `custom_ua` 有 11 字节截断** | 改写长度受原始 UA 长度与 11 字节上限双重约束；设长 UA 只生效前 11 字节，配置值≠真实值（见 03 坑 20） |
 | 4 | **认证要延迟 30s 启动** | 开机 5s 时 WAN 还没就绪，认证失败会进入最长 30 分钟的退避 |
 | 5 | **5G 要固定非 DFS 信道** | `auto` 会选到 DFS 信道 56，触发 60s CAC，重启后 70s 没网 |
 | 6 | **rmem 要调大** | 默认 176KB（180224B）会导致 UA2F netlink socket 溢出报 `No buffer space available` |
@@ -170,6 +170,7 @@ k2p-campus-net/
 | 19 | **packet steering 会覆盖 RPS** | 它按「最空闲核」写单核 `rps_cpus`，且 network / firewall reload 后自动重跑；必须钩在它之后 |
 | 20 | **DNS 上游按线路就近选** | 公共 DNS 不是万金油：实测运营商 DNS 10.8ms 快于阿里 15.0ms / 腾讯 17.5ms，CDN 解析也更近 |
 | 21 | **DNS 去广告清单别贪大** | 10.9 万条 ≈13MB 内存 + 0.94MB overlay；清单按字母序排，裁剪要用等间隔抽样而不是 `head` 截断 |
+| 22 | **WAF 拦 UA 认关键字** | EdgeOne 类 WAF 按 `safari` / `MicroMessenger` 关键字放行（不分大小写），残缺 `Mozilla/5.0` 会被拦 567；`custom_ua` 用 `Safari/537.`（11 字节内含 `Safari/`） |
 
 ---
 

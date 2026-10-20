@@ -70,7 +70,7 @@ meta ... "br-lan" counter ... queue ... to 10010  counter packets 64431 bytes 53
 旁路后必须确认 UA 改写没有被误伤：
 
 ```sh
-# 从内网设备访问 http://ua-check.stagoh.com/ ，应仍显示 Mozilla
+# 从内网设备访问 http://ua-check.stagoh.com/ ，应仍显示 Safari/537.
 # 或跑 scripts/90-verify-ua-length.py 批量复测
 ```
 

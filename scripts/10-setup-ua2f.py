@@ -4,8 +4,8 @@
 前提：ua2f 及其依赖已通过 apk 安装（见 docs/02-部署实战.md）。
 本脚本只负责写入配置并重启服务。
 
-注意：custom_ua 用 'Mozilla'（7 字节）。UA2F 是等长替换，
-custom_ua 越短覆盖范围越广，详见 docs/01-检测原理.md。
+注意：custom_ua 用 'Safari/537.'（11 字节）——它有 11 字节硬截断（设长了只生效前 11 字节），
+且必须含 Safari/ 关键字以过 EdgeOne 类 WAF，详见 docs/01-检测原理.md 与 docs/03 坑 20。
 """
 
 import os
@@ -14,7 +14,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
 from ssh_helper import connect, run, upload  # noqa: E402
 
-CUSTOM_UA = "Mozilla"
+CUSTOM_UA = "Safari/537."
 
 CONFIG = """config ua2f 'enabled'
     option enabled '1'
@@ -22,7 +22,7 @@ CONFIG = """config ua2f 'enabled'
 config ua2f 'firewall'
     option handle_fw '1'
     option handle_tls '0'
-    option handle_intranet '1'
+    option handle_intranet '0'
 
 config ua2f 'main'
     option mode 'NFQUEUE'
