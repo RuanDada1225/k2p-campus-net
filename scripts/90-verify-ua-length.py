@@ -4,6 +4,9 @@
 原理：UA2F 是等长替换，改写结果的长度 = 原始 UA 的长度。
       用不同长度的 UA 访问 UA 回显站点，观察改写结果。
 
+注意（见 docs/03 坑 20）：custom_ua 有 11 字节硬截断，
+      设长 UA 只会生效前 11 字节；当前推荐值 'Safari/537.'（含 EdgeOne WAF 通行证 safari 关键字）。
+
 前提：
   1. 本机已接入该路由器（走 K2P 上网）；
   2. UA2F 已启用。
@@ -15,6 +18,8 @@ import re
 import urllib.request
 
 URL = "http://ua-check.stagoh.com/"
+
+EXPECT = "Safari/537."  # 与 uci get ua2f.main.custom_ua 保持一致
 
 UAS = [
     "a",
@@ -42,11 +47,11 @@ def main():
             got = m.group(1) if m else "<parse-fail>"
         except Exception as exc:
             got = "ERR:%s" % exc
-        flag = "OK " if got == "Mozilla" else "!! "
+        flag = "OK " if got.startswith(EXPECT) else "!! "
         print("%sorig_len=%3d  ->  result_len=%3d  result=%r"
               % (flag, len(ua), len(got), got))
 
-    print("\n判定：常见 UA（>=7 字符）应全部变成 'Mozilla'；")
+    print("\n判定：常见 UA（>=%d 字符）应全部变成 %r；" % (len(EXPECT), EXPECT))
     print("      短于 custom_ua 长度的原始 UA 会残留，但现实中罕见。")
 
 
