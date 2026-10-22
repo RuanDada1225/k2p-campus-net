@@ -1,5 +1,7 @@
 # 斐讯 K2P 校园网多设备伪装实战（OpenWrt）
 
+[![ci](https://github.com/RuanDada1225/k2p-campus-net/actions/workflows/ci.yml/badge.svg)](https://github.com/RuanDada1225/k2p-campus-net/actions/workflows/ci.yml)
+
 > 把一台吃灰的斐讯 K2P 改造成「校园网单账号 · 多设备共用 · 不被多设备检测」的完整实战记录。
 >
 > 硬件：斐讯 K2P（MT7621A + MT7615DN，128MB RAM / 16MB Flash）
