@@ -34,13 +34,14 @@ export K2P_LAN_SUBNET=192.168.1.0/24
 | 10 | `43-optimize-dns-ipv6.py` | 关 LAN IPv6 + AAAA 过滤 + DNS 分流，修复「刷视频老是缓冲」 | 步骤 9 完成 |
 | 11 | `44-setup-esurfing-watchdog.py` | 认证失败加速重试（守护脚本 + cron，约 1 分钟） | 已装 esurfingclient |
 | 12 | `45-set-rps-masks.py` | **性能**：RPS 多核分散，反制 packet steering 单核钉死 | —— |
-| 13 | `50-fix-5g-channel.sh` | 5G 固定到非 DFS 信道 149（shell） | —— |
-| 14 | `60-install-extra-apps.sh` | 装 nlbwmon / watchcat 并调探测目标（shell） | 已配好软件源 |
-| 15 | `70-set-static-ip.py` | 静态 DHCP 保留，给常用设备固定 IP | —— |
-| 16 | `71-set-rdp-portforward.py` | RDP 端口转发（外网远程桌面连内网电脑） | 步骤 15 完成 |
-| 17 | `80-install-zram.sh` | 安装 zram 压缩交换，防止内存盘耗尽导致重启（shell） | 软件源可用 |
-| 18 | `90-verify-ua-length.py` | 批量验证 UA 改写覆盖范围（PC 上执行） | 步骤 1-2 完成 |
-| 19 | `46-setup-dns-adblock.sh` | **可选**：DNS 层去广告（dnsmasq addn-hosts）+ 每周自动更新（shell） | 步骤 10 完成；固件自带 uclient-fetch |
+| 13 | `47-persist-log.sh` | **可观测**：日志落盘 + 启动历史，断电也能事后取证（shell） | —— |
+| 14 | `50-fix-5g-channel.sh` | 5G 固定到非 DFS 信道 149（shell） | —— |
+| 15 | `60-install-extra-apps.sh` | 装 watchcat（断网自愈）/ nlbwmon（可选）并调探测目标（shell） | 已配好软件源 |
+| 16 | `70-set-static-ip.py` | 静态 DHCP 保留，给常用设备固定 IP | —— |
+| 17 | `71-set-rdp-portforward.py` | RDP 端口转发（外网远程桌面连内网电脑） | 步骤 16 完成 |
+| 18 | `80-install-zram.sh` | 安装 zram 压缩交换，防止内存盘耗尽导致重启（shell） | 软件源可用 |
+| 19 | `90-verify-ua-length.py` | 批量验证 UA 改写覆盖范围（PC 上执行） | 步骤 1-2 完成 |
+| 20 | `46-setup-dns-adblock.sh` | **可选（实机已下线）**：DNS 层去广告 + 每周自动更新（shell） | 步骤 10 完成；固件自带 uclient-fetch |
 
 > 带 `.sh` 的是**路由器端**脚本，用 `scp` 传上去或直接 `ssh root@路由器 'sh -s' < xxx.sh` 执行。
 > 带 `.py` 的是**本机**脚本，通过 paramiko 远程执行。
@@ -62,7 +63,13 @@ export K2P_LAN_SUBNET=192.168.1.0/24
 - `46-setup-dns-adblock.sh` 会部署 `/usr/bin/dns-adblock-update.sh` 与
   `/etc/dns-blocklist.hosts`，并往 `/etc/crontabs/root` 追加一条每周更新任务；
   默认把清单裁剪到 6 万条（等间隔抽样），可设 `AB_MAX_LINES=0` 用全量。
-  详见 `docs/07-DNS去广告.md`。
+  详见 `docs/07-DNS去广告.md`。**该功能已在实机下线**（体感收益有限），脚本保留供按需恢复。
+- `47-persist-log.sh` 把 syslog 落到 `/etc/log/messages`（`log_size` 512KB，约 24 小时），
+  并部署 `/etc/init.d/boot-log`（S99）记录每次启动与上次关机性质（正常关机 / 异常断电）。
+  会备份 `/etc/config/system` 与已存在的 boot-log 到 `.orig.<时间戳>`；幂等。
+  详见 `docs/08-持久日志与重启诊断.md`。
+- `60-install-extra-apps.sh` 里的 nlbwmon 是可选组件，本机已卸载：它的统计默认写在
+  tmpfs（重启清零），如需长期统计应先把数据库目录改到 overlay 并缩短 commit 间隔。
 - `70-set-static-ip.py` / `71-set-rdp-portforward.py` 里的设备清单（名称/MAC/IP/端口）
   都是**示例占位**，执行前必须改成自己的；两者都是幂等的，可重复执行。
 - **不要启用 flow offload**：被 offload 的流量绕过 mangle/postrouting，TTL 归一化与 UA2F 会失效。

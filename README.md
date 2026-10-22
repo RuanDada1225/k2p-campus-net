@@ -7,7 +7,7 @@
 > 认证：天翼校园网 ESurfingClient
 > 反检测：UA2F + TTL 归一化 + NTP 重定向
 >
-> 内容：7 篇文档 · 19 个可复用脚本 · 19 条实战踩坑（现象 → 定位 → 根因 → 解决）
+> 内容：8 篇文档 · 20 个可复用脚本 · 22 条实战踩坑（现象 → 定位 → 根因 → 解决）
 
 ---
 
@@ -84,20 +84,21 @@ python scripts/42-fix-dns-rebind.py          # 关闭 DNS 反重绑定保护（�
 python scripts/43-optimize-dns-ipv6.py       # DNS 分流 + AAAA 过滤 + 关 LAN IPv6（修复刷视频缓冲）
 python scripts/44-setup-esurfing-watchdog.py # 认证失败加速重试（约 1 分钟）
 python scripts/45-set-rps-masks.py           # 满速下载不丢包：RPS 多核分散（关键）
+ssh root@192.168.1.1 'sh -s' < scripts/47-persist-log.sh  # 日志落盘 + 启动历史（断电可查）
 ssh root@192.168.1.1 'sh -s' < scripts/50-fix-5g-channel.sh    # 5G 固定到非 DFS 信道 149
 ```
 
 以上是「让路由器跑起来」。跑起来之后，按实际需求可选：
 
 ```bash
-ssh root@192.168.1.1 'sh -s' < scripts/60-install-extra-apps.sh  # nlbwmon 流量统计 / watchcat 断网自愈
+ssh root@192.168.1.1 'sh -s' < scripts/60-install-extra-apps.sh  # watchcat 断网自愈（nlbwmon 可选）
 python scripts/70-set-static-ip.py           # 给常用设备固定 IP（改 DEVICES 后再执行）
 python scripts/71-set-rdp-portforward.py     # 外网远程桌面连内网电脑（改 DEVICES 后再执行）
 ssh root@192.168.1.1 'sh -s' < scripts/80-install-zram.sh   # zram 压缩交换（防内存盘耗尽重启）
-ssh root@192.168.1.1 'sh -s' < scripts/46-setup-dns-adblock.sh  # DNS 层去广告（网页广告/统计域名）
+ssh root@192.168.1.1 'sh -s' < scripts/46-setup-dns-adblock.sh  # DNS 层去广告（实机已下线，按需恢复）
 ```
 
-详细的原理、每一步的验证方法、以及我踩过的坑，见下方文档；性能调优（满速下载不卡顿）另见 `docs/06-CPU与收包性能调优.md`；DNS 层去广告见 `docs/07-DNS去广告.md`。
+详细的原理、每一步的验证方法、以及我踩过的坑，见下方文档；性能调优（满速下载不卡顿）另见 `docs/06-CPU与收包性能调优.md`；DNS 层去广告见 `docs/07-DNS去广告.md`（已下线）；持久日志与断电诊断见 `docs/08-持久日志与重启诊断.md`。
 
 ---
 
@@ -116,7 +117,8 @@ k2p-campus-net/
 │   ├── 04-验证与运维.md           # 如何验证生效 + 日常运维
 │   ├── 05-固定IP与远程访问.md      # 静态 DHCP 保留 + 端口转发（RDP）
 │   ├── 06-CPU与收包性能调优.md     # UA2F 短包旁路 + RPS 多核分散（满速下载不卡）
-│   └── 07-DNS去广告.md            # dnsmasq addn-hosts 去广告 + 每周自动更新
+│   ├── 07-DNS去广告.md            # dnsmasq addn-hosts 去广告 + 每周自动更新（已下线）
+│   └── 08-持久日志与重启诊断.md    # 日志落盘 + 启动历史，断电也能事后取证
 └── scripts/
     ├── README.md                 # 脚本清单与执行顺序
     ├── common/ssh_helper.py      # 通用 SSH 封装（凭据走环境变量）
@@ -133,6 +135,7 @@ k2p-campus-net/
     ├── 44-setup-esurfing-watchdog.py
     ├── 45-set-rps-masks.py
     ├── 46-setup-dns-adblock.sh
+    ├── 47-persist-log.sh
     ├── 50-fix-5g-channel.sh
     ├── 60-install-extra-apps.sh
     ├── 70-set-static-ip.py
@@ -143,9 +146,9 @@ k2p-campus-net/
 
 ---
 
-## 关键结论速查（22 条）
+## 关键结论速查（25 条）
 
-> 跨文档汇总的结论清单，与 `docs/03-踩坑与排错.md` 里的 20 条踩坑并非一一对应。
+> 跨文档汇总的结论清单，与 `docs/03-踩坑与排错.md` 里的 22 条踩坑并非一一对应。
 
 | # | 结论 | 说明 |
 |---|---|---|
@@ -171,6 +174,9 @@ k2p-campus-net/
 | 20 | **DNS 上游按线路就近选** | 公共 DNS 不是万金油：实测运营商 DNS 10.8ms 快于阿里 15.0ms / 腾讯 17.5ms，CDN 解析也更近 |
 | 21 | **DNS 去广告清单别贪大** | 10.9 万条 ≈13MB 内存 + 0.94MB overlay；清单按字母序排，裁剪要用等间隔抽样而不是 `head` 截断 |
 | 22 | **WAF 拦 UA 认关键字** | EdgeOne 类 WAF 按 `safari` / `MicroMessenger` 关键字放行（不分大小写），残缺 `Mozilla/5.0` 会被拦 567；`custom_ua` 用 `Safari/537.`（11 字节内含 `Safari/`） |
+| 23 | **ping 通 ≠ HTTPS 可达** | `ICMP 通 + TCP 443 断`是出口路径策略的典型指纹（校园网按 CDN 节点 IP 过滤）；排查要落到 TCP 层，并用第二出口（4G）做对照（03 坑 21） |
+| 24 | **校园 DNS 冷解析比电信慢 20 倍** | 实测 237ms vs 12ms（校园需转发+审计，缓存命中才快）；校园 DNS 只适合校内域名按域名转发，不要做全局唯一上游（03 坑 22） |
+| 25 | **日志要落盘 + 记录启动历史** | `system.log_file='/etc/log/messages'`（512KB≈24h）+ boot-log 用 `.clean_shutdown` 标记区分正常关机/异常断电（08 篇） |
 
 ---
 

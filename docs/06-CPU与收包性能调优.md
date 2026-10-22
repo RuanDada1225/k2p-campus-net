@@ -229,3 +229,65 @@ grep -A2 rps-tuning /etc/init.d/packet_steering     # 有钩子
   混合负载下最明显；单个大流仍可能集中在单核处理。
 - **IPv6 的长度语义**：`ip6 length` 匹配 IPv6 **负载长度**（不含 40 字节基本头），与 v4 的
   `ip length`（总长）不同。本环境 WAN 无 IPv6 上游，v6 旁路规则计数为 0，属防御性配置。
+
+---
+
+## 六、队列与缓冲补调（第二梯队，防「单点排队」）
+
+前三节解决的是「已经观察到的瓶颈」（ACK 洪水、RPS 单核）。本节是针对**潜在单点队列**的补调，
+四项全部低风险、可随时回退，且都做了持久化。
+
+### 6.1 参数与理由
+
+| 参数 | 默认/原值 | 调整为 | 作用 | 为什么调 |
+|---|---|---|---|---|
+| `net.ipv4.tcp_max_syn_backlog` | 128 | **4096** | TCP 半连接队列（SYN 排队） | 128 在多设备同时建连（P2P、测速、宿舍全员上线）时容易溢出丢 SYN |
+| dnsmasq `cachesize` | 1000 | **4000** | DNS 缓存条数 | 多设备 + 大量域名时缓存淘汰频繁，重复查询变多 |
+| `net.core.wmem_max` | 176KB | **4MB** | socket **发送**缓冲上限 | 之前只调了收方向（`rmem_max` 4MB），收发不对称，上传/视频通话受限 |
+| `net.core.netdev_budget` | 300 | **600** | 单次软中断可处理的包数 | 满速下载时收包预算偏紧，翻倍让 softirq 更从容 |
+
+> 另一项 `ua2f.main.nfqueue_workers` 曾从 `1` 调到 `4`（对应 4 个队列 / 4 核）。
+> 这个改动**没有解决当时的酷安图片问题**（真凶见 `03` 坑 20），但 4 workers 本身无害，
+> 高并发下更从容，故保留。
+
+### 6.2 落地方式
+
+```sh
+# 内核参数：写 sysctl 并立即生效
+cat >> /etc/sysctl.conf <<'EOF'
+net.ipv4.tcp_max_syn_backlog=4096
+net.core.wmem_max=4194304
+net.core.netdev_budget=600
+EOF
+sysctl -p /etc/sysctl.conf
+
+# dnsmasq 缓存
+uci set dhcp.@dnsmasq[0].cachesize='4000'
+uci commit dhcp
+/etc/init.d/dnsmasq restart
+
+# UA2F workers（可选）
+uci set ua2f.main.nfqueue_workers='4'
+uci commit ua2f
+/etc/init.d/ua2f restart
+```
+
+### 6.3 验证
+
+```sh
+sysctl net.ipv4.tcp_max_syn_backlog net.core.wmem_max net.core.netdev_budget
+uci get dhcp.@dnsmasq[0].cachesize        # 4000
+nslookup www.baidu.com 127.0.0.1         # 解析正常
+ping -c 2 223.5.5.5                      # 连通正常
+```
+
+持久性：sysctl 三项写在 `/etc/sysctl.conf`，重启由 `/etc/init.d/sysctl` 加载；
+dnsmasq 与 UA2F 均走 UCI commit，重启不丢。
+
+### 6.4 取舍说明
+
+- 这些都是「队列/缓冲上限」，调大只影响极端并发时的表现，**不改变稳态吞吐**；
+  实测三态（UA2F 开/关、长短 UA）吞吐差异都在噪声内，说明调参不是「提速」，而是「防掉队」。
+- `wmem_max` 调大后单连接内存占用上限提高，128MB 内存机器上仍安全（实际按需分配，不会预占）。
+- 带宽监控（nlbwmon）已从本机卸载：它把统计写在 tmpfs（重启清零），且对日常使用价值有限。
+  若需要长期流量统计，优先考虑「数据库目录落 overlay + 缩短 commit 间隔」的改法，而不是默认配置。
