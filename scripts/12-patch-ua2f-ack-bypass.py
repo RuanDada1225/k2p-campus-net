@@ -56,6 +56,13 @@ def main():
         if BYPASS_V4 in content:
             print("RESULT=ALREADY_PATCHED")
         elif QUEUE_LINE in content:
+            # 同上：只处理唯一一条队列行，出现多条就停下来问人
+            n_q = content.count(QUEUE_LINE)
+            if n_q != 1:
+                print("AMBIGUOUS：队列行出现 %d 次（期望 1 次），已中止。" % n_q)
+                print("请手工检查 %s 的 NFQUEUE 规则。" % INIT)
+                sys.exit(2)
+
             bak = backup(client, INIT)
             print("BACKUP=%s" % bak)
             if not bak:

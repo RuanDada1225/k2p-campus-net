@@ -99,6 +99,46 @@ ip neigh show 2>/dev/null | grep -E '__POOL_PREFIX__\.' | sort -t. -k4 -n
 """
 
 
+def validate():
+    """动手前先把「会把局域网搞挂」的配置错误拦下来。
+
+    最容易犯的是：保留地址写进了动态池范围 → dnsmasq 可能把同一个 IP 既当静态
+    又当动态分出去（租约冲突）。这种事现场表现为「某台设备时好时坏」，极难查。
+    """
+    errors = []
+    pool_start = int(POOL_START)
+    pool_end = pool_start + int(POOL_LIMIT) - 1
+
+    prefixes = {ip.rsplit(".", 1)[0] for _, _, ip in DEVICES if "." in ip}
+    if len(prefixes) != 1:
+        errors.append("DEVICES 里的 IP 不在同一网段：%s"
+                      % ("、".join(sorted(prefixes)) or "(空)"))
+    prefix = next(iter(prefixes), "192.168.1")
+
+    ips = [ip for _, _, ip in DEVICES]
+    for name, mac, ip in DEVICES:
+        try:
+            last = int(ip.rsplit(".", 1)[1])
+        except (IndexError, ValueError):
+            errors.append("%s 的 IP 格式不对：%r" % (name, ip))
+            continue
+        if pool_start <= last <= pool_end:
+            errors.append(
+                "%s 的保留地址 %s 落在动态池 %s.%d-%d 里，会撞车；"
+                "请把池缩小到保留地址之前（改 POOL_LIMIT），或把设备挪到池外"
+                % (name, ip, prefix, pool_start, pool_end))
+        if ips.count(ip) > 1:
+            errors.append("%s 与其他设备重复使用 %s" % (name, ip))
+
+    # 只认「脚本里自带的那几个示例 MAC」，不要按前缀猜 ——
+    # aa:bb:cc:dd:ee:ff 这类本地管理地址是合法 MAC，按前缀判会误伤
+    placeholder_macs = {"aa:bb:cc:00:00:0%d" % i for i in range(1, 5)}
+    for name, mac, _ in DEVICES:
+        if not mac or mac.lower() in placeholder_macs:
+            errors.append("%s 的 MAC 还是示例占位（%s），请换成真实 MAC" % (name, mac))
+    return errors
+
+
 def build_script():
     names = " ".join(d[0] for d in DEVICES)
     adds = "\n".join(
@@ -121,6 +161,13 @@ def build_script():
 
 
 def main():
+    errors = validate()
+    if errors:
+        print("配置检查未通过，未做任何修改：")
+        for e in errors:
+            print("  - %s" % e)
+        sys.exit(2)
+
     client = connect()
     try:
         upload(client, build_script(), "/tmp/70-set-static-ip.sh")

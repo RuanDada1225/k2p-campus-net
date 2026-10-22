@@ -46,6 +46,14 @@ def main():
         if NEW in content:
             print("RESULT=ALREADY_PATCHED")
         elif OLD in content:
+            # 只改「唯一一条」才是安全的。若上游将来出现两条队列规则，
+            # replace(..., 1) 会静默只改一条，另一半继续不受限 —— 宁可报错也不猜。
+            n_old = content.count(OLD)
+            if n_old != 1:
+                print("AMBIGUOUS：目标行出现 %d 次（期望 1 次）。" % n_old)
+                print("为免只改一半，已中止。请手工检查 %s 的 NFQUEUE 规则。" % INIT)
+                sys.exit(2)
+
             bak = backup(client, INIT)
             print("BACKUP=%s" % bak)
             if not bak:

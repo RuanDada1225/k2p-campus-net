@@ -54,7 +54,7 @@ boot() {
 PROBE = """table inet ttl_probe {
     chain postrouting {
         type filter hook postrouting priority mangle + 20; policy accept;
-        iifname "__LAN__" ip ttl set 55
+        iifname "__LAN__" ip daddr != __LAN_SUBNET__ ip ttl set 55
     }
 }
 """
@@ -87,7 +87,9 @@ def main():
     client = connect()
     try:
         def render(tmpl):
-            return tmpl.replace("__WAN__", target.WAN_IF).replace("__LAN__", target.LAN_IF)
+            return (tmpl.replace("__WAN__", target.WAN_IF)
+                    .replace("__LAN__", target.LAN_IF)
+                    .replace("__LAN_SUBNET__", target.LAN_SUBNET))
 
         upload(client, render(INIT), "/tmp/ttl-normalize.init")
         upload(client, render(PROBE), "/tmp/ttl_probe.nft")

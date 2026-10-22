@@ -100,6 +100,14 @@ GOT=$($UCI get "$CONF_NAME.main.custom_ua")
 [ "$GOT" = "__UA__" ] || { echo "FAIL: custom_ua=$GOT (期望 __UA__)"; exit 1; }
 echo "VERIFY=ok custom_ua=$GOT"
 
+# handle_tls / handle_intranet 直接决定「会不会把认证流量也改坏」，必须一起验
+for kv in handle_tls:0 handle_intranet:0; do
+    k=${kv%%:*}; want=${kv##*:}
+    got=$($UCI get "$CONF_NAME.firewall.$k")
+    [ "$got" = "$want" ] || { echo "FAIL: firewall.$k=$got (期望 $want)"; exit 1; }
+    echo "VERIFY=ok firewall.$k=$got"
+done
+
 echo "=== $CONF_NAME show ==="
 $UCI show "$CONF_NAME"
 """

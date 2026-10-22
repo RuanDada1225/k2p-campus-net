@@ -127,9 +127,13 @@ if [ "$MAX_LINES" -gt 0 ] && [ "$n" -gt "$MAX_LINES" ]; then
     # （umeng / tanx 这些全在后面），所以改成「等间隔抽样」，让覆盖率在
     # 整张表上均匀下降，而不是砍掉尾巴。
     step=$(( (n + MAX_LINES - 1) / MAX_LINES ))
-    awk -v s="$step" 'NR % s == 1' "$NEW" > "$NEW.cap" && mv -f "$NEW.cap" "$NEW"
+    # 等间隔抽样。偏移量按「周」轮换：固定取 NR % step == 1 会让同一批域名
+    # 永远留在表里、另一批永远进不来；每周换一个 off，长期看覆盖会轮流扫过全表。
+    week=$(( $(date +%s) / 604800 ))
+    off=$(( week % step ))
+    awk -v s="$step" -v o="$off" 'NR % s == o' "$NEW" > "$NEW.cap" && mv -f "$NEW.cap" "$NEW"
     n=$(wc -l < "$NEW")
-    log "sampled down to $n entries (every ${step}th line)"
+    log "sampled down to $n entries (every ${step}th line, offset ${off})"
 fi
 
 # 内容没变就不写盘、不 reload（省一次 flash 写入和 10 秒 DNS 抖动）

@@ -86,10 +86,20 @@ echo "auth_hb=$(grep -i esurfing /etc/log/messages 2>/dev/null | tail -1 | cut -
 echo "ua2f_err=$(grep -c 'conntrack catch error' /etc/log/messages 2>/dev/null)"
 """
 
+def ua2f_lan_hint(v):
+    """按规则条数反推「缺哪一步」，比统一报「应为 3」有用。"""
+    return {
+        "0": "ua2f 表里没有 br-lan 规则：11 没跑过（或 ua2f 没启动）",
+        "1": "只有队列规则：11 打了，12 的两条旁路没打",
+        "2": "只有旁路规则：11 的队列行可能被改坏，重跑 11",
+        "3": "",
+    }.get(v, "规则数异常（%s），建议重跑 11 → 12" % v)
+
+
 # key -> (标签, 期望值, 容忍说明)；期望值写成字符串，特殊项用函数
 CHECKS = [
     ("ua2f_pid", "UA2F 进程", lambda v: bool(v), "无 PID"),
-    ("ua2f_lan", "UA2F 只处理 br-lan", lambda v: v == "3", "规则数应为 3"),
+    ("ua2f_lan", "UA2F 只处理 br-lan", lambda v: v == "3", ua2f_lan_hint),
     ("ua2f_ho", "UA2F 短包旁路", lambda v: v == "2", "应为 2 条 header-only"),
     ("custom_ua", "custom_ua", lambda v: v == "Safari/537.", "应为 Safari/537.（11 字节上限）"),
     ("workers", "nfqueue workers", lambda v: v == "4", "应为 4"),
@@ -206,7 +216,8 @@ def main():
         value = state.get(key, "")
         passed = ok(value)
         failed += 0 if passed else 1
-        rows.append((passed, label, value, hint if not passed else ""))
+        text = hint(value) if callable(hint) else hint
+        rows.append((passed, label, value, "" if passed else text))
 
     width = max(dwidth(r[1]) for r in rows) + 2
     print("K2P 体检 @ %s   uptime=%ss   WAN=%s gw=%s" % (
