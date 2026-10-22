@@ -12,6 +12,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
+import target  # noqa: E402
 from ssh_helper import connect, run, upload, apply_steps  # noqa: E402
 
 INIT = """#!/bin/sh /etc/rc.common
@@ -29,8 +30,8 @@ start() {
 table inet $NFT_TABLE {
     chain postrouting {
         type filter hook postrouting priority mangle + 10; policy accept;
-        oifname "wan" ip ttl set 64
-        oifname "wan" ip6 hoplimit set 64
+        oifname "__WAN__" ip ttl set 64
+        oifname "__WAN__" ip6 hoplimit set 64
     }
 }
 EOF
@@ -53,7 +54,7 @@ boot() {
 PROBE = """table inet ttl_probe {
     chain postrouting {
         type filter hook postrouting priority mangle + 20; policy accept;
-        iifname "br-lan" ip ttl set 55
+        iifname "__LAN__" ip ttl set 55
     }
 }
 """
@@ -85,8 +86,11 @@ def main():
 
     client = connect()
     try:
-        upload(client, INIT, "/tmp/ttl-normalize.init")
-        upload(client, PROBE, "/tmp/ttl_probe.nft")
+        def render(tmpl):
+            return tmpl.replace("__WAN__", target.WAN_IF).replace("__LAN__", target.LAN_IF)
+
+        upload(client, render(INIT), "/tmp/ttl-normalize.init")
+        upload(client, render(PROBE), "/tmp/ttl_probe.nft")
 
         failed = apply_steps(client, [
             ("install", "cp /tmp/ttl-normalize.init /etc/init.d/ttl-normalize && "

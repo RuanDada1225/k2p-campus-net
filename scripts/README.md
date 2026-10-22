@@ -68,7 +68,7 @@ export K2P_LAN_SUBNET=192.168.1.0/24
   详见 `docs/07-DNS去广告.md`。**该功能已在实机下线**（体感收益有限），脚本保留供按需恢复。
 - `47-persist-log.sh` 把 syslog 落到 `/etc/log/messages`（`log_size` 512KB，约 24 小时），
   并部署 `/etc/init.d/boot-log`（S99）记录每次启动与上次关机性质（正常关机 / 异常断电）。
-  会备份 `/etc/config/system` 与已存在的 boot-log 到 `<path>.orig.<时间戳>`；幂等。
+  会备份 `/etc/config/system` 与已存在的 boot-log 到 `<path>.bak.<时间戳>`；幂等。
   详见 `docs/08-持久日志与重启诊断.md`。
 - `60-install-extra-apps.sh` 里的 nlbwmon 是可选组件，本机已卸载：它的统计默认写在
   tmpfs（重启清零），如需长期统计应先把数据库目录改到 overlay 并缩短 commit 间隔。

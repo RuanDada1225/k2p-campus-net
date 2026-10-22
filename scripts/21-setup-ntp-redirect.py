@@ -13,7 +13,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
-from ssh_helper import connect, run, upload, apply_steps, LAN_SUBNET  # noqa: E402
+import target  # noqa: E402
+from ssh_helper import connect, run, upload, apply_steps  # noqa: E402
 
 INIT_TMPL = """#!/bin/sh /etc/rc.common
 # Force LAN clients' NTP (UDP 123) queries to the router itself so that every
@@ -30,7 +31,7 @@ start() {
 table inet $NFT_TABLE {
     chain prerouting {
         type nat hook prerouting priority dstnat; policy accept;
-        iifname "br-lan" ip daddr != __LAN_SUBNET__ udp dport 123 counter redirect to :123
+        iifname "__LAN__" ip daddr != __LAN_SUBNET__ udp dport 123 counter redirect to :123
     }
 }
 EOF
@@ -52,7 +53,8 @@ boot() {
 
 
 def main():
-    init = INIT_TMPL.replace("__LAN_SUBNET__", LAN_SUBNET)
+    init = (INIT_TMPL.replace("__LAN_SUBNET__", target.LAN_SUBNET)
+            .replace("__LAN__", target.LAN_IF))
     client = connect()
     try:
         upload(client, init, "/tmp/ntp-redirect.init")

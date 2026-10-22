@@ -14,10 +14,12 @@ import time
 
 import paramiko
 
+import target
+
 HOST = os.environ.get("K2P_HOST", "192.168.1.1")
 USER = os.environ.get("K2P_USER", "root")
 PASSWORD = os.environ.get("K2P_PASSWORD", "")
-LAN_SUBNET = os.environ.get("K2P_LAN_SUBNET", "192.168.1.0/24")
+LAN_SUBNET = target.LAN_SUBNET   # 单一来源：common/target.py
 
 
 def connect():
