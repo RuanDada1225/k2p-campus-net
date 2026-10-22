@@ -41,7 +41,8 @@ export K2P_LAN_SUBNET=192.168.1.0/24
 | 17 | `71-set-rdp-portforward.py` | RDP 端口转发（外网远程桌面连内网电脑） | 步骤 16 完成 |
 | 18 | `80-install-zram.sh` | 安装 zram 压缩交换，防止内存盘耗尽导致重启（shell） | 软件源可用 |
 | 19 | `90-verify-ua-length.py` | 批量验证 UA 改写覆盖范围（PC 上执行） | 步骤 1-2 完成 |
-| 20 | `46-setup-dns-adblock.sh` | **可选（实机已下线）**：DNS 层去广告 + 每周自动更新（shell） | 步骤 10 完成；固件自带 uclient-fetch |
+| 20 | `91-health-check.py` | **运维**：一键体检，29 项基线 + 客户端侧 UA 回显 + CDN 节点探测（PC 上执行，只读不改配置） | 步骤 1-5 完成 |
+| 21 | `46-setup-dns-adblock.sh` | **可选（实机已下线）**：DNS 层去广告 + 每周自动更新（shell） | 步骤 10 完成；固件自带 uclient-fetch |
 
 > 带 `.sh` 的是**路由器端**脚本，用 `scp` 传上去或直接 `ssh root@路由器 'sh -s' < xxx.sh` 执行。
 > 带 `.py` 的是**本机**脚本，通过 paramiko 远程执行。

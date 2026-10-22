@@ -7,7 +7,7 @@
 > 认证：天翼校园网 ESurfingClient
 > 反检测：UA2F + TTL 归一化 + NTP 重定向
 >
-> 内容：8 篇文档 · 20 个可复用脚本 · 22 条实战踩坑（现象 → 定位 → 根因 → 解决）
+> 内容：8 篇文档 · 21 个可复用脚本 · 22 条实战踩坑（现象 → 定位 → 根因 → 解决）
 
 ---
 
@@ -88,6 +88,12 @@ ssh root@192.168.1.1 'sh -s' < scripts/47-persist-log.sh  # 日志落盘 + 启�
 ssh root@192.168.1.1 'sh -s' < scripts/50-fix-5g-channel.sh    # 5G 固定到非 DFS 信道 149
 ```
 
+**随时体检**（在 PC 上执行，不要在路由器上做 UA 回显——理由见 04 篇 2.2）：
+
+```bash
+python scripts/91-health-check.py --probe-node
+```
+
 以上是「让路由器跑起来」。跑起来之后，按实际需求可选：
 
 ```bash
@@ -141,12 +147,13 @@ k2p-campus-net/
     ├── 70-set-static-ip.py
     ├── 71-set-rdp-portforward.py
     ├── 80-install-zram.sh
-    └── 90-verify-ua-length.py
+    ├── 90-verify-ua-length.py
+    └── 91-health-check.py        # 一键体检（在 PC 上跑，含客户端侧 UA 回显与节点探测）
 ```
 
 ---
 
-## 关键结论速查（25 条）
+## 关键结论速查（26 条）
 
 > 跨文档汇总的结论清单，与 `docs/03-踩坑与排错.md` 里的 22 条踩坑并非一一对应。
 
@@ -177,6 +184,7 @@ k2p-campus-net/
 | 23 | **ping 通 ≠ HTTPS 可达** | `ICMP 通 + TCP 443 断`是出口路径策略的典型指纹（校园网按 CDN 节点 IP 过滤）；排查要落到 TCP 层，并用第二出口（4G）做对照（03 坑 21） |
 | 24 | **校园 DNS 冷解析比电信慢 20 倍** | 实测 237ms vs 12ms（校园需转发+审计，缓存命中才快）；校园 DNS 只适合校内域名按域名转发，不要做全局唯一上游（03 坑 22） |
 | 25 | **日志要落盘 + 记录启动历史** | `system.log_file='/etc/log/messages'`（512KB≈24h）+ boot-log 用 `.clean_shutdown` 标记区分正常关机/异常断电（08 篇） |
+| 26 | **UA 回显必须在客户端做，不能在路由器上做** | 队列规则带 `iifname "br-lan"`，路由器自身 output 流量不进 NFQUEUE；在路由器上回显只能看到 `uclient-fetch`，是假阴性（04 篇 2.2 有实测对照） |
 
 ---
 
