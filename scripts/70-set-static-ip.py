@@ -96,6 +96,21 @@ awk '{printf "%-16s %-18s %s\n", $3, $2, $4}' /tmp/dhcp.leases 2>/dev/null | sor
 echo
 echo '=== 在线状态（ARP） ==='
 ip neigh show 2>/dev/null | grep -E '__POOL_PREFIX__\.' | sort -t. -k4 -n
+
+echo
+echo '=== 校验（不一致就退出 1）==='
+# 以前这里只打印 AFTER 让人肉眼看，看漏就等于没生效；改成断言。
+bad=0
+for name in __NAMES__; do
+    n=$(uci show dhcp 2>/dev/null | grep -cE "^dhcp\.@host\[[0-9]+\]\.name='$name'\$")
+    [ "$n" = "1" ] || { echo "FAIL: $name 的保留记录 $n 条（期望 1，重跑可能产生了重复）"; bad=1; }
+done
+cur_start=$(uci -q get dhcp.lan.start)
+cur_limit=$(uci -q get dhcp.lan.limit)
+[ "$cur_start" = "__POOL_START__" ] || { echo "FAIL: dhcp.lan.start=$cur_start（期望 __POOL_START__）"; bad=1; }
+[ "$cur_limit" = "__POOL_LIMIT__" ] || { echo "FAIL: dhcp.lan.limit=$cur_limit（期望 __POOL_LIMIT__）"; bad=1; }
+pgrep -f '[d]nsmasq' >/dev/null || { echo 'FAIL: dnsmasq 未运行'; bad=1; }
+[ "$bad" = 0 ] && echo 'VERIFY=ok（每个设备各 1 条保留，地址池在保留段之前）' || { echo 'VERIFY=fail'; exit 1; }
 """
 
 
@@ -136,6 +151,9 @@ def validate():
     for name, mac, _ in DEVICES:
         if not mac or mac.lower() in placeholder_macs:
             errors.append("%s 的 MAC 还是示例占位（%s），请换成真实 MAC" % (name, mac))
+        # 设备名会拼进路由器端的 for 循环与 uci set，空格/引号会把命令拆坏
+        if not name or " " in name or "'" in name:
+            errors.append("设备名不能为空、不能含空格或单引号：%r" % name)
     return errors
 
 

@@ -20,3 +20,7 @@ venv/
 .idea/
 .DS_Store
 Thumbs.db
+
+# AI 助手的工作区目录（含本地会话记忆，不进仓库）
+.workbuddy/
+.codebuddy/

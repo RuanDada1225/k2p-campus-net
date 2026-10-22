@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
 import target  # noqa: E402
-from ssh_helper import connect, run, upload, apply_steps  # noqa: E402
+from ssh_helper import connect, run, upload  # noqa: E402
 
 INIT_TMPL = """#!/bin/sh /etc/rc.common
 # Force LAN clients' NTP (UDP 123) queries to the router itself so that every

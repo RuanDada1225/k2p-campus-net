@@ -42,7 +42,7 @@ export K2P_LAN_SUBNET=192.168.1.0/24
 | 18 | `71-set-rdp-portforward.py` | RDP 端口转发（外网远程桌面连内网电脑） | 步骤 17 完成 |
 | 19 | `80-install-zram.sh` | 安装 zram 压缩交换，防止内存盘耗尽导致重启（shell） | 软件源可用 |
 | 20 | `90-verify-ua-length.py` | 批量验证 UA 改写覆盖范围（PC 上执行） | 步骤 1-2 完成 |
-| 21 | `91-health-check.py` | **运维**：一键体检，29 项基线 + 客户端侧 UA 回显 + CDN 节点探测（PC 上执行，只读不改配置） | 步骤 1-5 完成 |
+| 21 | `91-health-check.py` | **运维**：一键体检，31 项基线 + 客户端侧 UA 回显 + CDN 节点探测（PC 上执行，只读不改配置；期望值见 `common/target.py`） | 步骤 1-5 完成 |
 | 22 | `46-setup-dns-adblock.sh` | **可选（实机已下线）**：DNS 层去广告 + 每周自动更新（shell） | 步骤 10 完成；固件自带 uclient-fetch |
 
 > 带 `.sh` 的是**路由器端**脚本，用 `scp` 传上去或直接 `ssh root@路由器 'sh -s' < xxx.sh` 执行。
@@ -57,8 +57,11 @@ export K2P_LAN_SUBNET=192.168.1.0/24
 - `11-patch-ua2f-lan-only.py` 会先备份 `/etc/init.d/ua2f` 到 `<path>.bak.<时间戳>`（`ssh_helper.backup()`）。
 - `12-patch-ua2f-ack-bypass.py` 同样用 `.bak.<时间戳>`，不会覆盖 11 号的备份（时间戳不同）。
 - `40-tune-rmem.py` 会修改 `/etc/sysctl.conf` 并重启 ua2f。
-- `43-optimize-dns-ipv6.py` 的校内域名 / 校园 DNS 默认是**示例占位**，执行前用
-  `CAMPUS_DOMAINS` / `CAMPUS_DNS` 环境变量改成你学校的（多个域名用空格分隔）。
+- `43-optimize-dns-ipv6.py` **幂等**：默认上游取 `common/target.py` 的 `DNS_UPSTREAM`
+  （本线路就近运营商 DNS），现有的 `/校内域名/校园DNS` 分流规则原样保留；
+  只有显式设置 `CAMPUS_DOMAINS` / `CAMPUS_DNS` 才重建分流规则（默认是示例占位）。
+  `DNS_CACHESIZE`、`K2P_FORCE_DOMAIN`+`K2P_FORCE_IP`（按域名覆盖 CDN）也可覆盖。
+  **不要退回「删光 server 只写公共 DNS」的老写法** —— 会把运营商 DNS 冲掉，见 03 篇坑 22。
 - `45-set-rps-masks.py` 会部署 `/usr/bin/rps-tuning.sh`、修改 `/etc/rc.local`，并给
   `/etc/init.d/packet_steering` 挂勾子（备份 `.bak.<时间戳>`）以压住它的自动覆盖，
   详见 `docs/06-CPU与收包性能调优.md`。
@@ -69,10 +72,16 @@ export K2P_LAN_SUBNET=192.168.1.0/24
 - `47-persist-log.sh` 把 syslog 落到 `/etc/log/messages`（`log_size` 512KB，约 24 小时），
   并部署 `/etc/init.d/boot-log`（S99）记录每次启动与上次关机性质（正常关机 / 异常断电）。
   会备份 `/etc/config/system` 与已存在的 boot-log 到 `<path>.bak.<时间戳>`；幂等。
-  详见 `docs/08-持久日志与重启诊断.md`。
+  `start()` 带 uptime 守卫：只有 `uptime ≤ 600s`（真开机时刻）才写记录，重跑本脚本不会
+  伪造一条「异常断电」。详见 `docs/08-持久日志与重启诊断.md`。
 - `60-install-extra-apps.sh` 里的 nlbwmon 是可选组件，本机已卸载：它的统计默认写在
   tmpfs（重启清零），如需长期统计应先把数据库目录改到 overlay 并缩短 commit 间隔。
+- `50-fix-5g-channel.sh` 的 `RADIO` / `VIF` / `VIF_2G` / `CHANNEL` 可用环境变量覆盖
+  （默认 `radio1` / `phy1-ap0` / `phy0-ap0` / `149`）；它现在轮询到信道生效才算完，
+  末尾断言不符即退出码 1，不再靠固定 `sleep 30` 赌。
 - `70-set-static-ip.py` / `71-set-rdp-portforward.py` 里的设备清单（名称/MAC/IP/端口）
   都是**示例占位**，执行前必须改成自己的；两者都是幂等的，可重复执行。
+  动手前先在 Python 侧做配置检查（保留地址是否落在动态池、WAN 端口是否重复、
+  目标是否在 LAN 网段、名字是否含空格），执行末尾逐项断言，任一不符退出码 1。
 - **不要启用 flow offload**：被 offload 的流量绕过 mangle/postrouting，TTL 归一化与 UA2F 会失效。
 - 这些脚本修改的是路由器**运行时 + 开机脚本**，确保重启后仍然生效。

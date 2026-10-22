@@ -23,6 +23,32 @@ jobs:
       - name: Python 语法（全部脚本可编译）
         run: python -m compileall -q scripts
 
+      - name: Python 静态检查（未定义名 / 未使用导入）
+        run: |
+          pip install pyflakes
+          python -m pyflakes scripts
+
+      - name: 文档里引用的脚本都存在
+        run: |
+          python - <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          root = pathlib.Path(".")
+          files = [root / "README.md", root / "scripts/README.md",
+                   *sorted(root.glob("docs/*.md"))]
+          pat = re.compile(r"scripts/[0-9]{2}-[a-z0-9-]+\.(?:py|sh)")
+          refs = set()
+          for f in files:
+              refs |= set(pat.findall(f.read_text(encoding="utf-8")))
+          missing = sorted(r for r in refs if not (root / r).is_file())
+          for r in missing:
+              print("missing:", r)
+          print("%d 个脚本引用，%d 个缺失" % (len(refs), len(missing)))
+          sys.exit(1 if missing else 0)
+          PY
+
       - name: Shell 语法（POSIX 子集，dash 与 busybox ash 行为接近）
         run: |
           fail=0

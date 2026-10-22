@@ -252,9 +252,12 @@ grep -A2 rps-tuning /etc/init.d/packet_steering     # 有钩子
 
 ### 6.2 落地方式
 
-> **内核参数那三项已脚本化**：`scripts/48-tune-sysctl.sh` 一次性写入并逐项回读校验
+> **内核参数那五项已脚本化**：`scripts/48-tune-sysctl.sh` 一次性写入并逐项回读校验
 > （`rmem_max` / `rmem_default` / `tcp_max_syn_backlog` / `wmem_max` / `netdev_budget`）。
 > 以前只在这篇文档里给手工命令，重装/换机时按脚本顺序走会漏掉后三项 —— 现在不会了。
+> `dnsmasq` 的 `cachesize` 已由 `scripts/43-optimize-dns-ipv6.py` 写入；
+> `nfqueue_workers` 用 `UA2F_WORKERS=4 python scripts/10-setup-ua2f.py` 落地
+> （10 号脚本在配置已存在时只改这一个键，其余保持不变）。
 
 ```sh
 # 推荐：一条命令写全（幂等、先备份、写完自检）
@@ -283,13 +286,18 @@ uci commit ua2f
 ### 6.3 验证
 
 ```sh
-sysctl net.ipv4.tcp_max_syn_backlog net.core.wmem_max net.core.netdev_budget
+sysctl net.core.rmem_max net.core.rmem_default \
+       net.ipv4.tcp_max_syn_backlog net.core.wmem_max net.core.netdev_budget
+# 五项应为 4194304 / 4194304 / 4096 / 4194304 / 600
 uci get dhcp.@dnsmasq[0].cachesize        # 4000
 nslookup www.baidu.com 127.0.0.1         # 解析正常
 ping -c 2 223.5.5.5                      # 连通正常
 ```
 
-持久性：sysctl 三项写在 `/etc/sysctl.conf`，重启由 `/etc/init.d/sysctl` 加载；
+> 这五项 + `cachesize` + 5G 信道 + 日志上限，`scripts/91-health-check.py` 都已纳入体检，
+> 不用再手抄一遍。
+
+持久性：sysctl 五项写在 `/etc/sysctl.conf`，重启由 `/etc/init.d/sysctl` 加载；
 dnsmasq 与 UA2F 均走 UCI commit，重启不丢。
 
 ### 6.4 取舍说明

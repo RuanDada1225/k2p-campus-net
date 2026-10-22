@@ -17,6 +17,13 @@ UA2F 的 nft 队列规则带 ``iifname "br-lan"``，**路由器自身发出的�
 同理，CDN 节点是否被校园网出口阻断，要站在「和手机同一个出口的客户端」上测；
 本脚本用 PC 的 socket 直连 443，与手机走的是同一条 NAT 出口。
 
+期望值从哪来
+------------
+`custom_ua` / `nfqueue_workers` / 运营商 DNS / cachesize / 5G 信道 / 日志上限 /
+域名覆盖，全部取自 `common/target.py`（都可用同名环境变量覆盖）。
+**期望值为空 = 该项不适用，直接跳过**——移植到别的学校时不会因为「本机没有这个基线」
+报一堆假 FAIL。改配置也只需改 target.py 一处，不必回来改体检脚本。
+
 退出码：全部通过 0；有 FAIL 1。
 """
 
@@ -60,7 +67,7 @@ echo "rmem=$(sysctl -n net.core.rmem_max)"
 echo "wmem=$(sysctl -n net.core.wmem_max)"
 echo "syn_backlog=$(sysctl -n net.ipv4.tcp_max_syn_backlog)"
 echo "netdev_budget=$(sysctl -n net.core.netdev_budget)"
-echo "dns_up=$(uci -q show dhcp.@dnsmasq[0].server | tr ' ' '\n' | grep -c 202.96.128.86)"
+echo "dns_up=$(uci -q show dhcp.@dnsmasq[0].server | tr ' ' '\n' | grep -c '__DNS_UP__')"
 echo "dns_cache=$(uci -q get dhcp.@dnsmasq[0].cachesize)"
 echo "napi_name=$(uci -q get dhcp.@domain[0].name)"
 echo "napi_ip=$(uci -q get dhcp.@domain[0].ip)"
@@ -77,12 +84,15 @@ echo "offload=$(uci -q get firewall.@defaults[0].flow_offloading)"
 echo "overlay_free=$(df -k /overlay | tail -1 | awk '{print $4}')"
 echo "zram=$(grep -c zram /proc/swaps 2>/dev/null)"
 echo "adblock=$(ls /etc/dns-blocklist.hosts 2>/dev/null | wc -l)"
-echo "nlbwmon=$(which nlbwmon 2>/dev/null | wc -l)"
 echo "rebind=$(uci -q get dhcp.@dnsmasq[0].rebind_protection)"
 echo "ra=$(uci -q get dhcp.lan.ra)"
 echo "aaaa=$(uci -q get dhcp.@dnsmasq[0].filter_aaaa)"
 echo "auth_pid=$(pgrep -f '[e]surfingclient' | head -1)"
 echo "auth_hb=$(grep -i esurfing /etc/log/messages 2>/dev/null | tail -1 | cut -c1-19)"
+echo "bootdelay=$(sed -n '/^boot() {/,/^}/p' /etc/init.d/esurfingclient 2>/dev/null | grep -o 'sleep [0-9]*' | grep -o '[0-9]*')"
+echo "cron_wd=$(grep -c esurfingclient-watchdog /etc/crontabs/root 2>/dev/null)"
+echo "wd_restarts=$(cat /tmp/esurfing-watchdog.log 2>/dev/null | wc -l)"
+echo "tz=$(date +%z)"
 echo "ua2f_err=$(grep -c 'conntrack catch error' /etc/log/messages 2>/dev/null)"
 """
 
@@ -96,38 +106,72 @@ def ua2f_lan_hint(v):
     }.get(v, "规则数异常（%s），建议重跑 11 → 12" % v)
 
 
-# key -> (标签, 期望值, 容忍说明)；期望值写成字符串，特殊项用函数
-CHECKS = [
-    ("ua2f_pid", "UA2F 进程", lambda v: bool(v), "无 PID"),
-    ("ua2f_lan", "UA2F 只处理 br-lan", lambda v: v == "3", ua2f_lan_hint),
-    ("ua2f_ho", "UA2F 短包旁路", lambda v: v == "2", "应为 2 条 header-only"),
-    ("custom_ua", "custom_ua", lambda v: v == "Safari/537.", "应为 Safari/537.（11 字节上限）"),
-    ("workers", "nfqueue workers", lambda v: v == "4", "应为 4"),
-    ("ttl_tbl", "TTL 归一化表", lambda v: v == "yes", "表不存在"),
-    ("ntp_tbl", "NTP 重定向表", lambda v: v == "yes", "表不存在"),
-    ("rmem", "rmem_max", lambda v: v == "4194304", "应为 4194304"),
-    ("wmem", "wmem_max", lambda v: v == "4194304", "应为 4194304"),
-    ("syn_backlog", "tcp_max_syn_backlog", lambda v: v == "4096", "应为 4096"),
-    ("netdev_budget", "netdev_budget", lambda v: v == "600", "应为 600"),
-    ("dns_up", "DNS 上游含电信", lambda v: v == "1", "缺 202.96.128.86"),
-    ("dns_cache", "DNS 缓存", lambda v: v == "4000", "应为 4000"),
-    ("napi_name", "napi 域名覆盖", lambda v: v == "napi.ithome.com", "覆盖丢失"),
-    ("napi_ip", "napi 覆盖 IP", lambda v: bool(v), "覆盖 IP 为空"),
-    ("log_file", "日志落盘", lambda v: v == "/etc/log/messages", "未落盘"),
-    ("log_size", "日志轮转上限", lambda v: v == "512", "应为 512KB"),
-    ("boot_last", "启动历史", lambda v: "boot" in v, "无本次启动记录"),
-    ("rps_wan", "RPS(wan)", lambda v: v == "7", "应为 7"),
-    ("rps_wifi", "RPS(wifi)", lambda v: v == "6", "应为 6"),
-    ("chan", "5G 信道", lambda v: v == "149", "应为 149"),
-    ("offload", "flow offload", lambda v: v in ("", "0"), "必须关闭！开了 TTL/UA2F 全失效"),
-    ("zram", "zram 交换", lambda v: v == "1", "无 /dev/zram0"),
-    ("adblock", "去广告已下线", lambda v: v == "0", "清单文件仍在"),
-    ("nlbwmon", "nlbwmon 已卸载", lambda v: v == "0", "仍在系统中"),
-    ("rebind", "DNS 反重绑定", lambda v: v == "0", "应为 0（坑 13）"),
-    ("ra", "LAN IPv6", lambda v: v == "disabled", "应为 disabled"),
-    ("aaaa", "AAAA 过滤", lambda v: v == "1", "应为 1"),
-    ("auth_pid", "认证进程", lambda v: bool(v), "esurfingclient 未运行"),
-]
+def build_checks():
+    """按 `common/target.py` 的期望值组装检查项（可用同名环境变量覆盖）。
+
+    以前这些期望值直接写死在本文件里：改一个 custom_ua、换一条线路 DNS、
+    换一个 5G 信道，体检就红 —— 而红的原因跟「设备坏了」无关。
+    现在：期望值集中在 target.py；**期望值为空 = 该项不适用，直接跳过**，
+    这样移植到别的学校/设备时不会因为「本机没有这个基线」而误报 FAIL。
+    """
+    chk = []
+    add = chk.append
+
+    # ---- UA2F / 指纹 ----
+    add(("ua2f_pid", "UA2F 进程", lambda v: bool(v), "无 PID"))
+    add(("ua2f_lan", "UA2F 只处理 br-lan", lambda v: v == "3", ua2f_lan_hint))
+    add(("ua2f_ho", "UA2F 短包旁路", lambda v: v == "2", "应为 2 条 header-only"))
+    add(("custom_ua", "custom_ua", lambda v: v == target.UA2F_CUSTOM_UA,
+         "应为 %s（11 字节上限）" % target.UA2F_CUSTOM_UA))
+    add(("workers", "nfqueue workers", lambda v: v == target.UA2F_WORKERS,
+         "应为 %s" % target.UA2F_WORKERS))
+    add(("ttl_tbl", "TTL 归一化表", lambda v: v == "yes", "表不存在"))
+    add(("ntp_tbl", "NTP 重定向表", lambda v: v == "yes", "表不存在"))
+    add(("offload", "flow offload", lambda v: v in ("", "0"),
+         "必须关闭！开了 TTL/UA2F 全失效"))
+
+    # ---- 内核调优（48 号脚本托管）----
+    add(("rmem", "rmem_max", lambda v: v == "4194304", "应为 4194304"))
+    add(("wmem", "wmem_max", lambda v: v == "4194304", "应为 4194304"))
+    add(("syn_backlog", "tcp_max_syn_backlog", lambda v: v == "4096", "应为 4096"))
+    add(("netdev_budget", "netdev_budget", lambda v: v == "600", "应为 600"))
+
+    # ---- DNS / IPv6 ----
+    if target.DNS_UPSTREAM:
+        add(("dns_up", "DNS 上游含运营商 DNS",
+             lambda v: v.isdigit() and int(v) >= 1,
+             "缺 %s（重跑 43 别冲掉它）" % target.DNS_UPSTREAM))
+    add(("dns_cache", "DNS 缓存", lambda v: v == target.DNS_CACHESIZE,
+         "应为 %s" % target.DNS_CACHESIZE))
+    if target.FORCE_DOMAIN:
+        add(("napi_name", "域名覆盖 %s" % target.FORCE_DOMAIN,
+             lambda v: v == target.FORCE_DOMAIN, "覆盖丢失（见 03 篇坑 21）"))
+        add(("napi_ip", "覆盖 IP", lambda v: bool(v), "覆盖 IP 为空"))
+    add(("rebind", "DNS 反重绑定", lambda v: v == "0", "应为 0（坑 13）"))
+    add(("ra", "LAN IPv6", lambda v: v == "disabled", "应为 disabled"))
+    add(("aaaa", "AAAA 过滤", lambda v: v == "1", "应为 1"))
+
+    # ---- 时钟 / 无线 ----
+    add(("tz", "时区", lambda v: v == "+0800", "应为 +0800（北京时间）"))
+    add(("chan", "5G 信道", lambda v: v == target.WIFI_5G_CHANNEL,
+         "应为 %s（固定非 DFS 信道，见 50 号脚本）" % target.WIFI_5G_CHANNEL))
+    add(("rps_wan", "RPS(wan)", lambda v: v == "7", "应为 7"))
+    add(("rps_wifi", "RPS(wifi)", lambda v: v == "6", "应为 6"))
+
+    # ---- 认证 ----
+    add(("auth_pid", "认证进程", lambda v: bool(v), "esurfingclient 未运行"))
+    add(("auth_hb", "认证日志心跳", lambda v: bool(v), "日志里没有 esurfing 输出"))
+    add(("bootdelay", "认证开机延迟", lambda v: v == "30", "boot() 里应为 sleep 30（见 30 号脚本）"))
+    add(("cron_wd", "认证守护 cron",
+         lambda v: v.isdigit() and int(v) >= 1, "crontab 缺 esurfingclient-watchdog（见 44 号脚本）"))
+
+    # ---- 可观测 / 内存 ----
+    add(("log_file", "日志落盘", lambda v: v == target.LOG_FILE, "未落盘（见 47 号脚本）"))
+    add(("log_size", "日志轮转上限", lambda v: v == target.LOG_SIZE,
+         "应为 %sKB" % target.LOG_SIZE))
+    add(("boot_last", "启动历史", lambda v: "boot" in v, "无本次启动记录"))
+    add(("zram", "zram 交换", lambda v: v == "1", "无 /dev/zram0"))
+    return chk
 
 
 def dwidth(text):
@@ -139,10 +183,17 @@ def pad(text, width):
     return text + " " * max(0, width - dwidth(text))
 
 
-def fmt_bytes(n):
+def as_int(value, default=0):
+    """探针取不到值时（文件不存在/命令不存在）返回 default，别让体检脚本自己崩掉。"""
     try:
-        n = int(n)
+        return int(str(value).strip())
     except (TypeError, ValueError):
+        return default
+
+
+def fmt_bytes(n):
+    n = as_int(n, -1)
+    if n < 0:
         return "-"
     return "%.1fKB" % (n / 1024.0) if n < 1024 * 1024 else "%.1fMB" % (n / 1024.0 / 1024.0)
 
@@ -199,7 +250,9 @@ def main():
     probe = (PROBE_SCRIPT
              .replace("__WAN__", target.WAN_IF)
              .replace("__LAN__", target.LAN_IF)
-             .replace("__WIFI5__", target.WIFI_5G_IF))
+             .replace("__WIFI5__", target.WIFI_5G_IF)
+             # 没配运营商 DNS 时用不可能出现的串，dns_up 恒为 0（该项也已跳过）
+             .replace("__DNS_UP__", target.DNS_UPSTREAM or "__unset__"))
     rc, out, err = ssh_helper.run(client, probe, timeout=90)
     client.close()
     if rc != 0 and not out.strip():
@@ -212,7 +265,7 @@ def main():
             state[key.strip()] = value.strip()
 
     rows, failed = [], 0
-    for key, label, ok, hint in CHECKS:
+    for key, label, ok, hint in build_checks():
         value = state.get(key, "")
         passed = ok(value)
         failed += 0 if passed else 1
@@ -236,18 +289,24 @@ def main():
         fmt_bytes(state.get("msg_size")), fmt_bytes(state.get("msg_old_size")),
         state.get("log_size", "?"), state.get("boot_prev") or state.get("boot_last", "?")))
     print("NTP 重定向命中：%s 包    overlay 可用：%.1fMB   UA2F conntrack 错误：%s" % (
-        state.get("ntp_hits", "?"), int(state.get("overlay_free") or 0) / 1024.0,
+        state.get("ntp_hits", "?"), as_int(state.get("overlay_free")) / 1024.0,
         state.get("ua2f_err", "?")))
+    print("上次认证日志：%s   本次启动以来守护脚本重启认证：%d 次" % (
+        state.get("auth_hb") or "(无)", as_int(state.get("wd_restarts"))))
+    # 去广告已下线：不再作为 FAIL 项，只作提示（恢复它时不该让体检变红）
+    print("去广告清单：%s（该功能已下线，仅提示；见 07 篇）"
+          % ("仍存在，如需彻底下线见 07 篇" if state.get("adblock") == "1" else "未启用"))
 
     if not args.no_client:
         print("-" * 74)
         ua, ua_err = client_ua_echo()
         if ua_err:
             print("WARN 客户端 UA 回显  %s" % ua_err)
-        elif ua == "Safari/537.":
+        elif ua == target.UA2F_CUSTOM_UA:
             print("OK   客户端 UA 回显  %s（UA2F 生效）" % ua)
         else:
-            print("FAIL 客户端 UA 回显  %s   <- 应为 Safari/537.（若在路由器上跑则结果无意义）" % ua)
+            print("FAIL 客户端 UA 回显  %s   <- 应为 %s（若在路由器上跑则结果无意义）"
+                  % (ua, target.UA2F_CUSTOM_UA))
             failed += 1
 
         status, ms = https_ok("napi.ithome.com")
@@ -273,7 +332,7 @@ def main():
         print("  当前覆盖：%s" % current)
 
     print("-" * 74)
-    print("结论：%d 项未通过" % failed)
+    print("结论：%d 项未通过（共 %d 项）" % (failed, len(rows)))
     return 1 if failed else 0
 
 

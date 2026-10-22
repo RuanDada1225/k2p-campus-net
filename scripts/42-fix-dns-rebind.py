@@ -20,6 +20,9 @@ dnsmasq 默认开启**反重绑定保护**（`rebind_protection=1`），会丢�
     export K2P_PASSWORD='...'
     python 42-fix-dns-rebind.py
 
+    # 可选：与 43 号脚本共用同一个变量，验证的校内域名取它的第一个
+    export CAMPUS_DOMAINS='jwxt.example.edu.cn'
+
 安全提示
 --------
 关掉保护后，内网 DNS 不再拦截「公网域名 → 私有 IP」的应答，理论上增加了
@@ -36,8 +39,9 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
 from ssh_helper import connect, run  # noqa: E402
 
-# 用来验证的校内域名（示例占位，换成你学校的）
-PROBE_DOMAIN = "jwxt.example.edu.cn"
+# 用来验证的校内域名：与 43 共用同一个环境变量（CAMPUS_DOMAINS 的第一个）
+_campus = os.environ.get("CAMPUS_DOMAINS", "").split()
+PROBE_DOMAIN = _campus[0] if _campus else "jwxt.example.edu.cn"
 
 CMD = r"""
 echo '=== BEFORE: rebind_protection ==='

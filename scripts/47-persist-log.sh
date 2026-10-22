@@ -8,6 +8,7 @@
 #   1. syslog 写入 /etc/log/messages，512KB 轮转（约 24 小时）
 #   2. 每次开机向 /etc/log/boot-history.log 追加一行，记录 btime 与
 #      上次关机性质（正常关机 / 异常断电），下次开机即可判断重启原因
+#      守卫：只有 uptime <= 600s（真开机时刻）才写；手动重跑本脚本不会伪造记录
 #
 # 卸载：/etc/init.d/boot-log disable; uci delete system.@system[0].log_file; uci commit system
 
@@ -48,11 +49,21 @@ cat > "$INIT" <<'EOF'
 START=99
 STOP=01
 
+# 只把「真开机」记进启动历史。
+# 本脚本被手动重跑时 uptime 往往是几千秒，那时写进来的记录既不是启动、
+# 又必然被标成「异常断电/复位」（此时不会有 .clean_shutdown 标记），
+# 会直接污染 08 篇「断电取证」的唯一可信证据。
+MAX_BOOT_UPTIME=600
+
 start() {
     LOG=/etc/log/boot-history.log
     NOW=$(date '+%F %T')
-    BTIME=$(awk '/btime/{print $2}' /proc/stat)
     UP=$(cut -d. -f1 /proc/uptime)
+    if [ "${UP:-999999}" -gt "$MAX_BOOT_UPTIME" ]; then
+        echo "$NOW  skip   uptime=${UP}s  非开机时刻，未记入启动历史"
+        return 0
+    fi
+    BTIME=$(awk '/btime/{print $2}' /proc/stat)
     if [ -f /etc/log/.clean_shutdown ]; then
         PREV="正常关机"
         rm -f /etc/log/.clean_shutdown
@@ -72,6 +83,8 @@ EOF
 
 chmod +x "$INIT"
 "$INIT" enable
+# 这里调 start 只是为了让「装完就能看到输出」；真正的 boot 行只会在下次开机的
+# 前 600 秒内写入，重跑本脚本不会伪造一条「异常断电」。
 "$INIT" start
 echo "已启用 boot-log（S99）"
 
@@ -80,6 +93,12 @@ echo ""
 echo "== 3/3 验证 =="
 echo "--- 启动历史 ---"
 cat "$HIST" 2>/dev/null || echo "（暂无记录）"
+echo "--- 疑似「非开机时刻」写入的旧记录（uptime > 600s，属于历史遗留，可手工删）---"
+grep -E 'uptime=[0-9]{4,}s' "$HIST" 2>/dev/null || echo "  （无）"
+if [ ! -s "$HIST" ]; then
+    echo "--- 说明：boot 行只在下一次「真实开机」时写入（uptime ≤ 600s 才记），"
+    echo "    重启一次再回来看；本脚本不会为当前这次运行伪造记录。"
+fi
 echo "--- 日志文件 ---"
 ls -l "$LOG_DIR"
 echo "--- logd 进程 ---"

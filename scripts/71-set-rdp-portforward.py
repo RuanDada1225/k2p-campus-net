@@ -30,6 +30,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
+import target  # noqa: E402
 from ssh_helper import connect, run, upload  # noqa: E402
 
 # 设备清单：(规则名, WAN 侧端口, 内网 IP)
@@ -80,7 +81,46 @@ uci show firewall 2>/dev/null | grep -E '@zone\[[0-9]+\]\.(name|input|forward)'
 echo
 echo '=== WAN 地址（外部要连的就是它） ==='
 ip -4 addr show dev $(uci get network.wan.device 2>/dev/null || echo wan) 2>/dev/null | grep inet
+
+echo
+echo '=== 校验（不一致就退出 1）==='
+bad=0
+for name in __NAMES__; do
+    n=$(uci show firewall 2>/dev/null | grep -cE "^firewall\.@redirect\[[0-9]+\]\.name='$name'\$")
+    [ "$n" = "1" ] || { echo "FAIL: $name 规则 $n 条（期望 1）"; bad=1; }
+done
+# WAN 端口撞车时后一条会静默覆盖/失效，现场表现为「某台怎么都连不上」
+dup=$(uci show firewall 2>/dev/null | sed -n "s/^firewall\.@redirect\[[0-9]*\]\.src_dport='\(.*\)'\$/\1/p" | sort | uniq -d)
+[ -z "$dup" ] || { echo "FAIL: WAN 端口重复：$dup"; bad=1; }
+# DNAT 是否真的落到了 nft（uci 写进去 ≠ fw4 生成规则）
+n=$(nft list ruleset 2>/dev/null | grep -cE '__PORTS_RE__')
+[ "${n:-0}" -ge 1 ] || { echo 'FAIL: nft 里找不到这些端口的 DNAT 规则'; bad=1; }
+[ "$bad" = 0 ] && echo "VERIFY=ok（每条规则 1 份，端口不重复，nft 里已生成 $n 条）" || { echo 'VERIFY=fail'; exit 1; }
 """
+
+
+def validate():
+    """动手前拦下「会把转发写坏」的错误，省得连上路由器才发现。
+
+    以前没有这一步：端口撞车/目标不在 LAN 网段时，脚本照样把规则写进去并回显
+    「成功」，现场表现是「某台电脑怎么都连不上」。
+    """
+    errors = []
+    ports = [p for _, p, _ in DEVICES]
+    for name, port, ip in DEVICES:
+        if not port.isdigit() or not (1 <= int(port) <= 65535):
+            errors.append("%s 的 WAN 端口不合法：%r" % (name, port))
+        elif port == RDP_PORT:
+            errors.append("%s 用了 %s（等于内网 RDP 端口），WAN 侧应换一个" % (name, port))
+        if not ip.startswith(target.LAN_PREFIX + "."):
+            errors.append("%s 的目标 %s 不在 LAN 网段 %s.0/24（先跑 70 固定 IP）"
+                          % (name, ip, target.LAN_PREFIX))
+        if not name or " " in name or "'" in name:
+            errors.append("规则名不能为空、不能含空格或单引号：%r" % name)
+    dup = sorted({p for p in ports if ports.count(p) > 1})
+    if dup:
+        errors.append("WAN 端口重复：%s（后写的会覆盖前一条）" % "、".join(dup))
+    return errors
 
 
 def build_script():
@@ -108,6 +148,13 @@ def build_script():
 
 
 def main():
+    errors = validate()
+    if errors:
+        print("配置检查未通过，未做任何修改：")
+        for e in errors:
+            print("  - %s" % e)
+        sys.exit(2)
+
     client = connect()
     try:
         upload(client, build_script(), "/tmp/71-set-rdp-portforward.sh")
