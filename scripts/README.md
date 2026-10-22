@@ -35,14 +35,15 @@ export K2P_LAN_SUBNET=192.168.1.0/24
 | 11 | `44-setup-esurfing-watchdog.py` | 认证失败加速重试（守护脚本 + cron，约 1 分钟） | 已装 esurfingclient |
 | 12 | `45-set-rps-masks.py` | **性能**：RPS 多核分散，反制 packet steering 单核钉死 | —— |
 | 13 | `47-persist-log.sh` | **可观测**：日志落盘 + 启动历史，断电也能事后取证（shell） | —— |
-| 14 | `50-fix-5g-channel.sh` | 5G 固定到非 DFS 信道 149（shell） | —— |
-| 15 | `60-install-extra-apps.sh` | 装 watchcat（断网自愈）/ nlbwmon（可选）并调探测目标（shell） | 已配好软件源 |
-| 16 | `70-set-static-ip.py` | 静态 DHCP 保留，给常用设备固定 IP | —— |
-| 17 | `71-set-rdp-portforward.py` | RDP 端口转发（外网远程桌面连内网电脑） | 步骤 16 完成 |
-| 18 | `80-install-zram.sh` | 安装 zram 压缩交换，防止内存盘耗尽导致重启（shell） | 软件源可用 |
-| 19 | `90-verify-ua-length.py` | 批量验证 UA 改写覆盖范围（PC 上执行） | 步骤 1-2 完成 |
-| 20 | `91-health-check.py` | **运维**：一键体检，29 项基线 + 客户端侧 UA 回显 + CDN 节点探测（PC 上执行，只读不改配置） | 步骤 1-5 完成 |
-| 21 | `46-setup-dns-adblock.sh` | **可选（实机已下线）**：DNS 层去广告 + 每周自动更新（shell） | 步骤 10 完成；固件自带 uclient-fetch |
+| 14 | `48-tune-sysctl.sh` | **性能**：五个内核调优项一次写全并逐项回读校验（shell，幂等，先备份） | —— |
+| 15 | `50-fix-5g-channel.sh` | 5G 固定到非 DFS 信道 149（shell） | —— |
+| 16 | `60-install-extra-apps.sh` | 装 watchcat（断网自愈）/ nlbwmon（可选）并调探测目标（shell） | 已配好软件源 |
+| 17 | `70-set-static-ip.py` | 静态 DHCP 保留，给常用设备固定 IP | —— |
+| 18 | `71-set-rdp-portforward.py` | RDP 端口转发（外网远程桌面连内网电脑） | 步骤 17 完成 |
+| 19 | `80-install-zram.sh` | 安装 zram 压缩交换，防止内存盘耗尽导致重启（shell） | 软件源可用 |
+| 20 | `90-verify-ua-length.py` | 批量验证 UA 改写覆盖范围（PC 上执行） | 步骤 1-2 完成 |
+| 21 | `91-health-check.py` | **运维**：一键体检，29 项基线 + 客户端侧 UA 回显 + CDN 节点探测（PC 上执行，只读不改配置） | 步骤 1-5 完成 |
+| 22 | `46-setup-dns-adblock.sh` | **可选（实机已下线）**：DNS 层去广告 + 每周自动更新（shell） | 步骤 10 完成；固件自带 uclient-fetch |
 
 > 带 `.sh` 的是**路由器端**脚本，用 `scp` 传上去或直接 `ssh root@路由器 'sh -s' < xxx.sh` 执行。
 > 带 `.py` 的是**本机**脚本，通过 paramiko 远程执行。

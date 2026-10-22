@@ -207,9 +207,28 @@ grep -h 'addn-hosts' /var/etc/dnsmasq.conf.* 2>/dev/null | sed 's/^/  /' || echo
 
 echo
 echo "=== d) 每周定时更新 ==="
-grep -v 'dns-adblock-update.sh' /etc/crontabs/root > /tmp/.cron.new 2>/dev/null || true
-echo "$AB_SCHED AB_SRC='$AB_SRC' AB_MAX_LINES=$AB_MAX_LINES $AB_UPDATER >/dev/null 2>&1" >> /tmp/.cron.new
-mv /tmp/.cron.new /etc/crontabs/root
+# 防呆：以前是 grep -v ... > /tmp/.cron.new || true 然后 mv 覆盖，
+# 一旦 grep 或重定向失败（/tmp 满、crontab 不存在），就会用空文件把
+# esurfingclient-watchdog 那条每分钟任务一起冲掉。这里改成「先数行数再替换」。
+keep_n=0
+if [ -f /etc/crontabs/root ]; then
+    keep_n=$(grep -vc 'dns-adblock-update.sh' /etc/crontabs/root 2>/dev/null || true)
+    [ -n "$keep_n" ] || keep_n=0
+fi
+tmp=$(mktemp 2>/dev/null || echo /tmp/.cron.new)
+: > "$tmp"
+if [ -f /etc/crontabs/root ]; then
+    grep -v 'dns-adblock-update.sh' /etc/crontabs/root >> "$tmp" 2>/dev/null || true
+fi
+echo "$AB_SCHED AB_SRC='$AB_SRC' AB_MAX_LINES=$AB_MAX_LINES $AB_UPDATER >/dev/null 2>&1" >> "$tmp"
+got_n=$(wc -l < "$tmp")
+if [ "$got_n" -ne $((keep_n + 1)) ]; then
+    echo "  ⚠ crontab 行数异常（原保留 $keep_n 行 + 新增 1 行，实际 $got_n 行），放弃替换"
+    rm -f "$tmp"
+else
+    mv "$tmp" /etc/crontabs/root
+    echo "  crontab 已更新（保留 $keep_n 行 + 新增 1 行）"
+fi
 /etc/init.d/cron reload >/dev/null 2>&1 || /etc/init.d/cron restart >/dev/null 2>&1 || true
 echo "  --- crontab ---"
 sed 's/^/  /' /etc/crontabs/root

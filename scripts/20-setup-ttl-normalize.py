@@ -7,6 +7,7 @@
 用独立的 nft 表 ttl_normalize + 开机脚本，避免被 fw4 / UA2F 重启清掉。
 """
 
+import argparse
 import os
 import sys
 
@@ -52,13 +53,36 @@ boot() {
 PROBE = """table inet ttl_probe {
     chain postrouting {
         type filter hook postrouting priority mangle + 20; policy accept;
-        oifname "br-lan" ip ttl set 55
+        iifname "br-lan" ip ttl set 55
     }
 }
 """
 
+PROBE_HINT = """--- 反证法（可选，需在 WAN 侧抓包或看计数器）---
+把「从 LAN 进来、正要发往 WAN」的包 TTL 改成 55：
+
+    nft -f /tmp/ttl_probe.nft        # 或重跑本脚本加 --with-probe
+
+此时在内网 ping 外网（Windows 默认 TTL=128），再在 WAN 侧抓包：
+    - TTL 仍是 64  -> 归一化生效
+    - TTL 是 55    -> 归一化没生效（检查是否开了 flow offload）
+验证完务必删除反证表：
+    nft delete table inet ttl_probe
+
+注意方向：必须用 iifname（从 LAN 进），不是 oifname。
+oifname \"br-lan\" 改的是路由器回给客户端 的包，那些包永远不出 WAN，
+这个验证会变成「无论配置对错都通过」的空验证。
+"""
+
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="TTL/HopLimit 归一化",
+        epilog="反证表默认只打印用法、不自动加载，避免在现网留下改 TTL 的表")
+    parser.add_argument("--with-probe", action="store_true",
+                        help="同时加载反证表 ttl_probe（把 LAN 入向 TTL 改成 55）")
+    args = parser.parse_args()
+
     client = connect()
     try:
         upload(client, INIT, "/tmp/ttl-normalize.init")
@@ -78,11 +102,10 @@ def main():
             if err.strip():
                 print("  STDERR:", err.strip())
 
-        print("\n--- 反证法验证（可选，需在 WAN 侧抓包配合）---")
-        print("加载反证表，把 LAN 出向 TTL 改成 55：")
-        print(run(client, "nft -f /tmp/ttl_probe.nft && echo PROBE_OK")[1].strip())
-        print("此时在内网 ping 外网并在 WAN 侧抓包，TTL 应仍为 64。")
-        print("验证完请删除反证表：nft delete table inet ttl_probe")
+        print(PROBE_HINT)
+        if args.with_probe:
+            print(run(client, "nft -f /tmp/ttl_probe.nft && echo PROBE_LOADED")[1].strip())
+            print("（验证完记得 nft delete table inet ttl_probe）")
     finally:
         client.close()
 

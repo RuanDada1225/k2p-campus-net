@@ -49,13 +49,20 @@ uci show dhcp 2>/dev/null | grep -E 'host\[[0-9]+\]\.(name|mac|ip)' || echo '(�
 echo
 echo '=== 删除同名旧保留（保证幂等） ==='
 for name in __NAMES__; do
-    while :; do
+    n=0
+    while [ "$n" -lt 20 ]; do
         idx=$(uci show dhcp 2>/dev/null \
               | sed -n "s/^dhcp\.\(@host\[[0-9]*\]\)\.name='$name'\$/\1/p" | head -1)
         [ -n "$idx" ] || break
-        uci -q delete "dhcp.$idx"
+        uci -q delete "dhcp.$idx" || { echo "FAIL: 删除 dhcp.$idx 失败，中止"; exit 1; }
         echo "deleted dhcp.$idx  ($name)"
+        n=$((n+1))
     done
+    # 兜底：删不干净就停，别让 while 无限转到 SSH 超时
+    if [ "$n" -ge 20 ]; then
+        echo "FAIL: $name 的旧保留删不干净（已尝试 20 次），中止"
+        exit 1
+    fi
 done
 
 echo

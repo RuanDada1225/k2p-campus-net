@@ -7,7 +7,7 @@
 > 认证：天翼校园网 ESurfingClient
 > 反检测：UA2F + TTL 归一化 + NTP 重定向
 >
-> 内容：8 篇文档 · 21 个可复用脚本 · 22 条实战踩坑（现象 → 定位 → 根因 → 解决）
+> 内容：8 篇文档 · 22 个可复用脚本 · 22 条实战踩坑（现象 → 定位 → 根因 → 解决）
 
 ---
 
@@ -85,6 +85,7 @@ python scripts/43-optimize-dns-ipv6.py       # DNS 分流 + AAAA 过滤 + 关 LA
 python scripts/44-setup-esurfing-watchdog.py # 认证失败加速重试（约 1 分钟）
 python scripts/45-set-rps-masks.py           # 满速下载不丢包：RPS 多核分散（关键）
 ssh root@192.168.1.1 'sh -s' < scripts/47-persist-log.sh  # 日志落盘 + 启动历史（断电可查）
+ssh root@192.168.1.1 'sh -s' < scripts/48-tune-sysctl.sh  # 五个内核调优项一次写全（幂等 + 回读校验）
 ssh root@192.168.1.1 'sh -s' < scripts/50-fix-5g-channel.sh    # 5G 固定到非 DFS 信道 149
 ```
 
@@ -142,6 +143,7 @@ k2p-campus-net/
     ├── 45-set-rps-masks.py
     ├── 46-setup-dns-adblock.sh
     ├── 47-persist-log.sh
+    ├── 48-tune-sysctl.sh         # 五个内核调优项一次写全（幂等 + 回读校验）
     ├── 50-fix-5g-channel.sh
     ├── 60-install-extra-apps.sh
     ├── 70-set-static-ip.py

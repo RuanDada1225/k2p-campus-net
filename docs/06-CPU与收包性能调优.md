@@ -252,8 +252,15 @@ grep -A2 rps-tuning /etc/init.d/packet_steering     # 有钩子
 
 ### 6.2 落地方式
 
+> **内核参数那三项已脚本化**：`scripts/48-tune-sysctl.sh` 一次性写入并逐项回读校验
+> （`rmem_max` / `rmem_default` / `tcp_max_syn_backlog` / `wmem_max` / `netdev_budget`）。
+> 以前只在这篇文档里给手工命令，重装/换机时按脚本顺序走会漏掉后三项 —— 现在不会了。
+
 ```sh
-# 内核参数：先删旧键再追加（脚本重复执行时不会叠加重复行）
+# 推荐：一条命令写全（幂等、先备份、写完自检）
+ssh root@192.168.1.1 'sh -s' < scripts/48-tune-sysctl.sh
+
+# 下面保留手工等价写法，便于理解它改了什么
 sed -i '/^net.ipv4.tcp_max_syn_backlog=/d;/^net.core.wmem_max=/d;/^net.core.netdev_budget=/d' /etc/sysctl.conf
 cat >> /etc/sysctl.conf <<'EOF'
 net.ipv4.tcp_max_syn_backlog=4096
@@ -267,7 +274,7 @@ uci set dhcp.@dnsmasq[0].cachesize='4000'
 uci commit dhcp
 /etc/init.d/dnsmasq restart
 
-# UA2F workers（可选）
+# UA2F workers（可选，10 号脚本在配置已存在时不会碰这个键）
 uci set ua2f.main.nfqueue_workers='4'
 uci commit ua2f
 /etc/init.d/ua2f restart
