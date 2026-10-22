@@ -253,7 +253,8 @@ grep -A2 rps-tuning /etc/init.d/packet_steering     # 有钩子
 ### 6.2 落地方式
 
 ```sh
-# 内核参数：写 sysctl 并立即生效
+# 内核参数：先删旧键再追加（脚本重复执行时不会叠加重复行）
+sed -i '/^net.ipv4.tcp_max_syn_backlog=/d;/^net.core.wmem_max=/d;/^net.core.netdev_budget=/d' /etc/sysctl.conf
 cat >> /etc/sysctl.conf <<'EOF'
 net.ipv4.tcp_max_syn_backlog=4096
 net.core.wmem_max=4194304

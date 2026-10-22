@@ -5,7 +5,7 @@
 #       /etc/apk/repositories.d/distfeeds.list，不要手工创建 /etc/apk/repositories。
 #
 # 装完后：
-#   nlbwmon  —— 流量统计（数据库默认在 tmpfs，重启清空）
+#   nlbwmon  —— 流量统计（数据库默认在 tmpfs，重启清空；本项目实机已卸载，按需安装）
 #   watchcat —— 断网自动重启；探测目标改成国内可达地址
 
 echo "=== 空间检查 ==="
