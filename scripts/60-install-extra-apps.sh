@@ -14,8 +14,14 @@ df -h /overlay
 echo "=== apk update ==="
 apk update 2>&1 | tail -5
 
-echo "=== 安装 nlbwmon ==="
-apk add luci-app-nlbwmon 2>&1 | tail -5
+echo "=== 安装 nlbwmon（可选，默认跳过）==="
+# 本项目实机已卸载 nlbwmon：它的数据库在 tmpfs，重启清零，价值有限（见 docs/04 4.5）。
+# 以前这里是无条件安装，等于「修个 watchcat 顺手把卸掉的包又装回来」。
+if [ "${INSTALL_NLBWMON:-0}" = "1" ]; then
+    apk add luci-app-nlbwmon 2>&1 | tail -5
+else
+    echo "  跳过（需要时：INSTALL_NLBWMON=1 sh 60-install-extra-apps.sh）"
+fi
 
 echo "=== 安装 watchcat ==="
 apk add luci-app-watchcat 2>&1 | tail -5
@@ -31,8 +37,10 @@ sleep 3
 pgrep -af watchcat.sh
 
 echo "=== 服务状态 ==="
-ubus call service list '{"name":"nlbwmon"}' 2>/dev/null | grep -o '"running": *true'
-ubus call service list '{"name":"watchcat"}' 2>/dev/null | grep -o '"running": *true'
+if [ "${INSTALL_NLBWMON:-0}" = "1" ]; then
+    ubus call service list '{"name":"nlbwmon"}' 2>/dev/null | grep -o '"running": *true' || echo "  nlbwmon: 未运行"
+fi
+ubus call service list '{"name":"watchcat"}' 2>/dev/null | grep -o '"running": *true' || echo "  watchcat: 未运行"
 
 echo "=== 剩余空间 ==="
 df -h /overlay

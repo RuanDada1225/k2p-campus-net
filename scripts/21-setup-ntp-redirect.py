@@ -13,7 +13,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
-from ssh_helper import connect, run, upload, LAN_SUBNET  # noqa: E402
+from ssh_helper import connect, run, upload, apply_steps, LAN_SUBNET  # noqa: E402
 
 INIT_TMPL = """#!/bin/sh /etc/rc.common
 # Force LAN clients' NTP (UDP 123) queries to the router itself so that every
@@ -80,6 +80,14 @@ def main():
             print(out.strip())
             if err.strip():
                 print("  STDERR:", err.strip())
+
+        # 收尾断言：表在 + ntpd 在听，缺一就退出 1（别让失败被当成成功）
+        rc, out, _ = run(client,
+                         "nft list table inet ntp_redirect >/dev/null 2>&1 && "
+                         "pgrep -f '[n]tpd' >/dev/null && echo NTP_OK || echo NTP_BAD")
+        if "NTP_OK" not in out:
+            print("\nFAIL：ntp_redirect 表或 ntpd 未就绪，请检查上面的输出")
+            sys.exit(1)
 
         print("\n验证：内网设备向不可路由地址（如 203.0.113.1）发 NTP 请求，")
         print("      若能收到合法应答，说明请求被劫持到路由器。")

@@ -54,13 +54,13 @@ export K2P_LAN_SUBNET=192.168.1.0/24
 
 ## 注意
 
-- `11-patch-ua2f-lan-only.py` 会先备份 `/etc/init.d/ua2f` 到 `.orig`。
-- `12-patch-ua2f-ack-bypass.py` 备份到 `/etc/init.d/ua2f.ack.orig`（不覆盖 11 号的 `.orig` 基线备份）。
+- `11-patch-ua2f-lan-only.py` 会先备份 `/etc/init.d/ua2f` 到 `<path>.bak.<时间戳>`（`ssh_helper.backup()`）。
+- `12-patch-ua2f-ack-bypass.py` 同样用 `.bak.<时间戳>`，不会覆盖 11 号的备份（时间戳不同）。
 - `40-tune-rmem.py` 会修改 `/etc/sysctl.conf` 并重启 ua2f。
 - `43-optimize-dns-ipv6.py` 的校内域名 / 校园 DNS 默认是**示例占位**，执行前用
   `CAMPUS_DOMAINS` / `CAMPUS_DNS` 环境变量改成你学校的（多个域名用空格分隔）。
 - `45-set-rps-masks.py` 会部署 `/usr/bin/rps-tuning.sh`、修改 `/etc/rc.local`，并给
-  `/etc/init.d/packet_steering` 挂勾子（备份 `.orig`）以压住它的自动覆盖，
+  `/etc/init.d/packet_steering` 挂勾子（备份 `.bak.<时间戳>`）以压住它的自动覆盖，
   详见 `docs/06-CPU与收包性能调优.md`。
 - `46-setup-dns-adblock.sh` 会部署 `/usr/bin/dns-adblock-update.sh` 与
   `/etc/dns-blocklist.hosts`，并往 `/etc/crontabs/root` 追加一条每周更新任务；
@@ -68,7 +68,7 @@ export K2P_LAN_SUBNET=192.168.1.0/24
   详见 `docs/07-DNS去广告.md`。**该功能已在实机下线**（体感收益有限），脚本保留供按需恢复。
 - `47-persist-log.sh` 把 syslog 落到 `/etc/log/messages`（`log_size` 512KB，约 24 小时），
   并部署 `/etc/init.d/boot-log`（S99）记录每次启动与上次关机性质（正常关机 / 异常断电）。
-  会备份 `/etc/config/system` 与已存在的 boot-log 到 `.orig.<时间戳>`；幂等。
+  会备份 `/etc/config/system` 与已存在的 boot-log 到 `<path>.orig.<时间戳>`；幂等。
   详见 `docs/08-持久日志与重启诊断.md`。
 - `60-install-extra-apps.sh` 里的 nlbwmon 是可选组件，本机已卸载：它的统计默认写在
   tmpfs（重启清零），如需长期统计应先把数据库目录改到 overlay 并缩短 commit 间隔。

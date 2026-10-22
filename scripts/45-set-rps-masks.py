@@ -13,7 +13,7 @@
        eth0/wan/lan1-4 → 7（cpu0+1+2）
        phy*-ap*        → 6（cpu1+2；cpu0 扛硬件中断、cpu3 跑无线 napi/tx，避开）
   2. /etc/rc.local 开机调用一次；
-  3. 在 /etc/init.d/packet_steering 的 reload_service 末尾挂钩子（备份 .orig）——
+  3. 在 /etc/init.d/packet_steering 的 reload_service 末尾挂钩子（备份为 `<path>.bak.<ts>`）——
      它每次重跑，我们紧跟着覆盖回去。
 
 注意：不要启用 flow offload —— 被 offload 的流量绕过 mangle/postrouting，
@@ -26,7 +26,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
-from ssh_helper import connect, run, upload  # noqa: E402
+from ssh_helper import connect, run, backup, upload_atomic  # noqa: E402
 
 RPS_SH = "/usr/bin/rps-tuning.sh"
 RC_LOCAL = "/etc/rc.local"
@@ -67,10 +67,12 @@ def show_masks(client):
 def main():
     client = connect()
     try:
-        # 1) 部署 rps-tuning.sh
-        rc = upload(client, RPS_SCRIPT, RPS_SH)
-        run(client, "chmod 755 %s" % RPS_SH)
+        # 1) 部署 rps-tuning.sh（原子写，避免中断留下半截脚本）
+        rc = upload_atomic(client, RPS_SCRIPT, RPS_SH)
         print("RESULT=UPLOAD_RPS write_rc=%d" % rc)
+        if rc != 0:
+            print("FAIL：写入 %s 失败" % RPS_SH)
+            sys.exit(1)
 
         # 2) rc.local 开机调用
         rc, content, err = run(client, "cat %s" % RC_LOCAL)
@@ -80,12 +82,12 @@ def main():
         if "rps-tuning.sh" in content:
             print("RESULT=RC_LOCAL_ALREADY")
         else:
-            run(client, "cp %s %s.orig" % (RC_LOCAL, RC_LOCAL))
+            print("BACKUP=%s" % backup(client, RC_LOCAL))
             if "exit 0" in content:
                 content = content.replace("exit 0", RC_HOOK + "\nexit 0", 1)
             else:
                 content = content.rstrip("\n") + "\n\n" + RC_HOOK
-            rc = upload(client, content, RC_LOCAL)
+            rc = upload_atomic(client, content, RC_LOCAL)
             print("RESULT=RC_LOCAL_PATCHED write_rc=%d" % rc)
 
         # 3) packet_steering 钩子
@@ -104,13 +106,15 @@ def main():
                 print("PATTERN_NOT_FOUND：packet_steering 结构不同，")
                 print("请手工在 reload_service 末尾追加 /usr/bin/rps-tuning.sh 调用")
             else:
-                run(client, "cp %s %s.orig" % (STEERING, STEERING))
+                print("BACKUP=%s" % backup(client, STEERING))
                 content = content[:close] + STEERING_HOOK + content[close:]
-                rc = upload(client, content, STEERING)
+                rc = upload_atomic(client, content, STEERING)
                 run(client, "chmod 755 %s" % STEERING)
                 print("RESULT=STEERING_HOOKED write_rc=%d" % rc)
-                print("=== diff vs backup ===")
-                print(run(client, "diff %s.orig %s" % (STEERING, STEERING))[1])
+                # 校验不用 diff（busybox 没有）：看语法 + 钩子行是否存在
+                rc2, out2, _ = run(client, "sh -n %s && echo SYNTAX_OK" % STEERING)
+                n = run(client, "grep -c 'rps-tuning.sh' %s" % STEERING)[1].strip()
+                print("语法检查: %s   钩子行: %s 处" % (out2.strip() or "FAIL", n))
 
         # 4) 立即生效 + 持久性检验
         run(client, RPS_SH)

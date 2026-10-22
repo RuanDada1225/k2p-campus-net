@@ -31,6 +31,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
 import ssh_helper  # noqa: E402
+import target  # noqa: E402
 
 ITHOME_NODES = [
     ("江苏", "183.131.62.41"),
@@ -45,10 +46,10 @@ ITHOME_BLOCKED = ("广东(原节点)", "175.12.90.41")
 PROBE_SCRIPT = r"""
 echo "now=$(date '+%F %T')"
 echo "uptime=$(cut -d. -f1 /proc/uptime)"
-echo "wan_ip=$(ip -4 addr show wan | awk '/inet /{print $2; exit}')"
+echo "wan_ip=$(ip -4 addr show __WAN__ | awk '/inet /{print $2; exit}')"
 echo "wan_gw=$(ip route | awk '/default/{print $3; exit}')"
 echo "ua2f_pid=$(pgrep -f '[u]a2f' | head -1)"
-echo "ua2f_lan=$(nft list table inet ua2f 2>/dev/null | grep -c 'br-lan')"
+echo "ua2f_lan=$(nft list table inet ua2f 2>/dev/null | grep -c '__LAN__')"
 echo "ua2f_ho=$(nft list table inet ua2f 2>/dev/null | grep -c header-only)"
 echo "custom_ua=$(uci -q get ua2f.main.custom_ua)"
 echo "workers=$(uci -q get ua2f.main.nfqueue_workers)"
@@ -69,9 +70,9 @@ echo "msg_size=$(wc -c < /etc/log/messages 2>/dev/null)"
 echo "msg_old_size=$(wc -c < /etc/log/messages.old 2>/dev/null)"
 echo "boot_last=$(tail -1 /etc/log/boot-history.log 2>/dev/null)"
 echo "boot_prev=$(tail -1 /etc/log/boot-history.log 2>/dev/null | sed 's/.*prev=//')"
-echo "rps_wan=$(cat /sys/class/net/wan/queues/rx-0/rps_cpus 2>/dev/null)"
-echo "rps_wifi=$(cat /sys/class/net/phy1-ap0/queues/rx-0/rps_cpus 2>/dev/null)"
-echo "chan=$(iw dev phy1-ap0 info 2>/dev/null | grep -o 'channel [0-9]*' | awk '{print $2}')"
+echo "rps_wan=$(cat /sys/class/net/__WAN__/queues/rx-0/rps_cpus 2>/dev/null)"
+echo "rps_wifi=$(cat /sys/class/net/__WIFI5__/queues/rx-0/rps_cpus 2>/dev/null)"
+echo "chan=$(iw dev __WIFI5__ info 2>/dev/null | grep -o 'channel [0-9]*' | awk '{print $2}')"
 echo "offload=$(uci -q get firewall.@defaults[0].flow_offloading)"
 echo "overlay_free=$(df -k /overlay | tail -1 | awk '{print $4}')"
 echo "zram=$(grep -c zram /proc/swaps 2>/dev/null)"
@@ -185,7 +186,11 @@ def main():
     args = parser.parse_args()
 
     client = ssh_helper.connect()
-    rc, out, err = ssh_helper.run(client, PROBE_SCRIPT, timeout=90)
+    probe = (PROBE_SCRIPT
+             .replace("__WAN__", target.WAN_IF)
+             .replace("__LAN__", target.LAN_IF)
+             .replace("__WIFI5__", target.WIFI_5G_IF))
+    rc, out, err = ssh_helper.run(client, probe, timeout=90)
     client.close()
     if rc != 0 and not out.strip():
         sys.exit("取状态失败：%s" % err.strip())

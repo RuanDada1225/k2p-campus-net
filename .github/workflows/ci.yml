@@ -1,0 +1,40 @@
+name: ci
+
+# 只做「能不能跑」的静态检查，不连真实路由器（CI 里没有那台设备）。
+# 目的：把这几类问题挡在合入前 —— 语法错、变量改了没改全、shell 里用到了 busybox 没有的写法。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  static-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: Python 语法（全部脚本可编译）
+        run: python -m compileall -q scripts
+
+      - name: Shell 语法（POSIX 子集，dash 与 busybox ash 行为接近）
+        run: |
+          fail=0
+          for f in scripts/*.sh; do
+            echo "--- $f"
+            dash -n "$f" || fail=1
+          done
+          exit $fail
+
+      - name: shellcheck（只报 error 级别）
+        continue-on-error: true   # 先当提示用，等存量问题清完再改成阻塞
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck --severity=error scripts/*.sh

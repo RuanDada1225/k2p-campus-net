@@ -1,0 +1,6 @@
+# scripts/*.py 的第三方依赖（只有 paramiko）
+#
+# 为什么锁上界：paramiko 的大版本会改 exec_command / Channel 的行为，
+# 而本项目的脚本全靠 exec_command 的 rc 与 stdout 判定成败。
+# 实测可用：5.0.0（Python 3.12）。下界 3.0 是 exec_command(timeout=) 稳定可用的起点。
+paramiko>=3.0,<6.0

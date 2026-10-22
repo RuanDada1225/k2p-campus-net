@@ -12,7 +12,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
-from ssh_helper import connect, run, upload  # noqa: E402
+from ssh_helper import connect, run, upload, apply_steps  # noqa: E402
 
 INIT = """#!/bin/sh /etc/rc.common
 # Normalize IPv4 TTL / IPv6 hop-limit on WAN egress to defeat
@@ -88,19 +88,17 @@ def main():
         upload(client, INIT, "/tmp/ttl-normalize.init")
         upload(client, PROBE, "/tmp/ttl_probe.nft")
 
-        for label, cmd in [
+        failed = apply_steps(client, [
             ("install", "cp /tmp/ttl-normalize.init /etc/init.d/ttl-normalize && "
                         "chmod 755 /etc/init.d/ttl-normalize && echo INSTALL_OK"),
             ("enable", "/etc/init.d/ttl-normalize enable && echo ENABLED"),
             ("start", "/etc/init.d/ttl-normalize start && echo STARTED"),
-            ("rc.d", "ls -l /etc/rc.d/ | grep ttl"),
+            ("rc.d", "ls -l /etc/rc.d/ | grep ttl || true"),
             ("table", "nft list table inet ttl_normalize"),
-        ]:
-            rc, out, err = run(client, cmd)
-            print("=== %s (rc=%d) ===" % (label, rc))
-            print(out.strip())
-            if err.strip():
-                print("  STDERR:", err.strip())
+        ])
+        if failed:
+            print("\nFAIL：以下步骤失败 -> %s" % ", ".join(failed))
+            sys.exit(1)
 
         print(PROBE_HINT)
         if args.with_probe:

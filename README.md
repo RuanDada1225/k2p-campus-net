@@ -62,8 +62,8 @@
 > 前提：路由器已刷 OpenWrt 并能 SSH 登录；校园网账号密码已知。
 
 ```bash
-# 0. 准备：把 scripts/ 拷到本地，装好 paramiko
-pip install paramiko
+# 0. 准备：把 scripts/ 拷到本地，装好依赖（只有 paramiko）
+pip install -r requirements.txt
 
 # 1. 设置连接信息（不要写进仓库）
 export K2P_HOST=192.168.1.1
@@ -115,6 +115,8 @@ ssh root@192.168.1.1 'sh -s' < scripts/46-setup-dns-adblock.sh  # DNS 层去广�
 k2p-campus-net/
 ├── README.md                     # 本文件：总览与快速开始
 ├── LICENSE                       # MIT
+├── requirements.txt              # Python 依赖（只有 paramiko，锁了上界）
+├── .github/workflows/ci.yml      # CI：compileall + dash -n + shellcheck
 ├── .gitignore                    # 忽略凭据 / 日志
 ├── .gitattributes                # 强制 LF 行尾
 ├── docs/
@@ -129,6 +131,7 @@ k2p-campus-net/
 └── scripts/
     ├── README.md                 # 脚本清单与执行顺序
     ├── common/ssh_helper.py      # 通用 SSH 封装（凭据走环境变量）
+    ├── common/target.py          # 设备差异点（网口名 / 网段 / radio），移植只改这里
     ├── 10-setup-ua2f.py
     ├── 11-patch-ua2f-lan-only.py
     ├── 12-patch-ua2f-ack-bypass.py
