@@ -62,5 +62,12 @@ DNS_UPSTREAM = os.environ.get("K2P_DNS_UPSTREAM", "202.96.128.86")
 
 # 按域名强制的 CDN 覆盖（03 篇坑 21/22 的兜底手段）。
 # FORCE_DOMAIN 留空 = 91 跳过该检查、43 不动现有覆盖。
-FORCE_DOMAIN = os.environ.get("K2P_FORCE_DOMAIN", "napi.ithome.com")
+#
+# 2026-10-24：默认值已清空。原值 napi.ithome.com -> 183.131.62.41 属于失效配置：
+#   1) 该 API 域名在服务端下线——112.67.255.199 与 183.131.62.41 两台 IT之家 服务器
+#      对 Host: napi.ithome.com 一律回 404，只有 api.ithome.com 才有 200；
+#   2) 真实 CDN 节点 175.12.90.41 的 443 被校园网按 CDN 段屏蔽（80 秒连、443 超时），
+#      所以「指回真实解析」也救不了，覆盖本身已无收益；
+#   3) 实机上的该条覆盖已删除，重跑 43 不应再种回去。
+FORCE_DOMAIN = os.environ.get("K2P_FORCE_DOMAIN", "")
 FORCE_IP = os.environ.get("K2P_FORCE_IP", "")

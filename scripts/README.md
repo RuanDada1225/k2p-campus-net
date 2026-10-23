@@ -90,4 +90,15 @@ export K2P_LAN_SUBNET=192.168.1.0/24
   原因是**认证掉线后 IP 层仍能通 ICMP**：2026-10-23 22:38 实际断网、22:40 起 ping 一直成功，
   watchdog 因此 26 分钟没动作（`/tmp/esurfing-watchdog.stamp` 全程未更新），直到 23:06 才恢复。
   幂等；改前备份 `<path>.bak.<ts>`；`K2P_WATCHDOG_SH=/tmp/x` 可先在副本上演练，不碰现网。
+- **实机另做过一批手工加固，尚未脚本化**（2026-10-24，换机/重刷后需手工补）：
+  `/etc/sysctl.conf` 追加 `net.ipv4.conf.{all,default,wan,br-lan}.rp_filter=2`、
+  `kernel.kptr_restrict=1`、`net.ipv4.conf.{all,default,wan,br-lan}.send_redirects=0`。
+  选**宽松** RPF 而非严格，是因为本机有 UA2F 的 NFQUEUE 与多张独立 nft 表，
+  严格模式（1）有误杀风险；实测改后 `Ip: InDiscards` 仍为 0，未丢任何正常流量。
+- `system.conloglevel` 已由 8 降为 4。它走 `/etc/init.d/system` 的 `dmesg -n`，
+  **只影响内核消息是否写串口（ttyS0）**，不改变 `/etc/log/messages` 的落盘量。
+- `napi.ithome.com -> 183.131.62.41` 的域名覆盖已删除（该 API 域名服务端下线，
+  详见 `common/target.py` 注释）；`91` 相应两项检查因 `FORCE_DOMAIN` 默认值清空而自动跳过。
+- `/etc/config/esurfingclient.1.logout` 是 JSON 而非 uci 格式，放在 `/etc/config/` 下会让
+  每条 `uci` 命令在 stderr 吐一句 `Parse error (invalid command) at line 1`，属已知噪音，可忽略。
 - 这些脚本修改的是路由器**运行时 + 开机脚本**，确保重启后仍然生效。

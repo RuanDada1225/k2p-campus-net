@@ -309,12 +309,17 @@ def main():
                   % (ua, target.UA2F_CUSTOM_UA))
             failed += 1
 
-        status, ms = https_ok("napi.ithome.com")
-        if status.startswith("HTTP"):
-            print("OK   napi.ithome.com  %s %.0fms（覆盖节点可达）" % (status, ms))
-        else:
-            print("FAIL napi.ithome.com  %s   <- 节点可能又被出口阻断，用 --probe-node 换 IP" % status)
-            failed += 1
+        # 只有配了「按域名强制覆盖」时这项才有意义：它探的是「被覆盖到的那台节点」可达。
+        # 没有覆盖时该域名由 CDN 决定，探它只会得到出口阻断的假失败
+        # （napi.ithome.com 已于 2026-10-24 在服务端下线，见 common/target.py 注释）。
+        if target.FORCE_DOMAIN:
+            status, ms = https_ok(target.FORCE_DOMAIN)
+            if status.startswith("HTTP"):
+                print("OK   %s  %s %.0fms（覆盖节点可达）" % (target.FORCE_DOMAIN, status, ms))
+            else:
+                print("FAIL %s  %s   <- 节点可能又被出口阻断，用 --probe-node 换 IP"
+                      % (target.FORCE_DOMAIN, status))
+                failed += 1
 
     if args.probe_node:
         print("-" * 74)
@@ -327,9 +332,9 @@ def main():
         print("  %-4s %-16s %s（%s）" % ("OK" if ok else "FAIL", ip, name,
                                          "已放行" if ok else "仍被阻断，符合预期"))
         if not ok:
-            print("  -> 出口阻断仍在，napi 覆盖必须保留")
+            print("  -> 出口阻断仍在（该节点 80 秒连、443 被屏蔽）")
         current = state.get("napi_ip", "")
-        print("  当前覆盖：%s" % current)
+        print("  当前覆盖：%s" % (current or "(无，已随 napi.ithome.com 下线一并删除)"))
 
     print("-" * 74)
     print("结论：%d 项未通过（共 %d 项）" % (failed, len(rows)))
