@@ -50,7 +50,7 @@ cat /proc/swaps
 echo "  --- 内存 ---"
 free -m
 echo "  --- 开机自启 ---"
-ls -l /etc/rc.d/ 2>/dev/null | grep zram || echo "  (未设置开机自启!)"
+ls -l /etc/rc.d/*zram* 2>/dev/null || echo "  (未设置开机自启!)"
 
 echo
 echo "=== 安装后空间 ==="

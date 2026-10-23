@@ -25,7 +25,7 @@ mkdir -p "$LOG_DIR"
 
 # ---------- 1. syslog 落盘 ----------
 echo "== 1/3 syslog 落盘 =="
-cp /etc/config/system /etc/config/system.bak.$(date +%s) 2>/dev/null || true
+cp /etc/config/system "/etc/config/system.bak.$(date +%s)" 2>/dev/null || true
 
 uci set system.@system[0].log_file="$LOG_FILE"
 uci set system.@system[0].log_size='512'

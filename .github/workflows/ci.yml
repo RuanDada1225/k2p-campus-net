@@ -58,8 +58,11 @@ jobs:
           done
           exit $fail
 
-      - name: shellcheck（只报 error 级别）
-        continue-on-error: true   # 先当提示用，等存量问题清完再改成阻塞
+      - name: shellcheck（只报 error 级别，阻塞）
+        # 2026-10-24：存量 error 已为 0（本地 shellcheck 0.11.0 全量跑过 7 个 .sh），
+        # 故去掉 continue-on-error 改为阻塞。余下的只有 warning/note：
+        # SC3037（echo -n，busybox ash 支持）、SC2009/SC2010（只影响展示）、
+        # 个别 SC2046 —— 都不影响脚本行为，暂不纳入阻塞口径。
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck
