@@ -85,6 +85,7 @@ ssh root@192.168.1.1 'sh -s' < scripts/41-set-timezone.sh      # 时区 + 国内
 python scripts/42-fix-dns-rebind.py          # 关闭 DNS 反重绑定保护（修复校内站点打不开）
 python scripts/43-optimize-dns-ipv6.py       # DNS 分流 + AAAA 过滤 + 关 LAN IPv6（修复刷视频缓冲）
 python scripts/44-setup-esurfing-watchdog.py # 认证失败加速重试（约 1 分钟）
+python scripts/44b-patch-watchdog-http-probe.py # watchdog 存活探测改 HTTP(S)（修 ping 假在线）
 python scripts/45-set-rps-masks.py           # 满速下载不丢包：RPS 多核分散（关键）
 ssh root@192.168.1.1 'sh -s' < scripts/47-persist-log.sh  # 日志落盘 + 启动历史（断电可查）
 ssh root@192.168.1.1 'sh -s' < scripts/48-tune-sysctl.sh  # 五个内核调优项一次写全（幂等 + 回读校验）
@@ -145,6 +146,7 @@ k2p-campus-net/
     ├── 42-fix-dns-rebind.py
     ├── 43-optimize-dns-ipv6.py
     ├── 44-setup-esurfing-watchdog.py
+    ├── 44b-patch-watchdog-http-probe.py  # 存活探测改 HTTP(S)：修「ping 通但不能上网」漏判
     ├── 45-set-rps-masks.py
     ├── 46-setup-dns-adblock.sh
     ├── 47-persist-log.sh

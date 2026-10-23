@@ -33,6 +33,7 @@ export K2P_LAN_SUBNET=192.168.1.0/24
 | 9 | `42-fix-dns-rebind.py` | 关闭 dnsmasq 反重绑定保护，修复校内站点打不开 | —— |
 | 10 | `43-optimize-dns-ipv6.py` | 关 LAN IPv6 + AAAA 过滤 + DNS 分流，修复「刷视频老是缓冲」 | 步骤 9 完成 |
 | 11 | `44-setup-esurfing-watchdog.py` | 认证失败加速重试（守护脚本 + cron，约 1 分钟） | 已装 esurfingclient |
+| 11b | `44b-patch-watchdog-http-probe.py` | **可靠性**：把 watchdog 的存活探测从 ping 改成 HTTP(S)，消除「假在线」漏判 | 步骤 11 完成 |
 | 12 | `45-set-rps-masks.py` | **性能**：RPS 多核分散，反制 packet steering 单核钉死 | —— |
 | 13 | `47-persist-log.sh` | **可观测**：日志落盘 + 启动历史，断电也能事后取证（shell） | —— |
 | 14 | `48-tune-sysctl.sh` | **性能**：五个内核调优项一次写全并逐项回读校验（shell，幂等，先备份） | —— |
@@ -84,4 +85,9 @@ export K2P_LAN_SUBNET=192.168.1.0/24
   动手前先在 Python 侧做配置检查（保留地址是否落在动态池、WAN 端口是否重复、
   目标是否在 LAN 网段、名字是否含空格），执行末尾逐项断言，任一不符退出码 1。
 - **不要启用 flow offload**：被 offload 的流量绕过 mangle/postrouting，TTL 归一化与 UA2F 会失效。
+- `44b-patch-watchdog-http-probe.py` 把 44 号 watchdog 里的 `ping` 判断换成 `uclient-fetch` 的 HTTP(S) 探测
+  （2 个 HTTPS 目标 + 1 个 204 空响应体探针，三选一成功才算在线；路由器上没装 curl）。
+  原因是**认证掉线后 IP 层仍能通 ICMP**：2026-10-23 22:38 实际断网、22:40 起 ping 一直成功，
+  watchdog 因此 26 分钟没动作（`/tmp/esurfing-watchdog.stamp` 全程未更新），直到 23:06 才恢复。
+  幂等；改前备份 `<path>.bak.<ts>`；`K2P_WATCHDOG_SH=/tmp/x` 可先在副本上演练，不碰现网。
 - 这些脚本修改的是路由器**运行时 + 开机脚本**，确保重启后仍然生效。
