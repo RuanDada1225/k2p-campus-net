@@ -63,11 +63,13 @@ DNS_UPSTREAM = os.environ.get("K2P_DNS_UPSTREAM", "202.96.128.86")
 # 按域名强制的 CDN 覆盖（03 篇坑 21/22 的兜底手段）。
 # FORCE_DOMAIN 留空 = 91 跳过该检查、43 不动现有覆盖。
 #
-# 2026-10-24：默认值已清空。原值 napi.ithome.com -> 183.131.62.41 属于失效配置：
-#   1) 该 API 域名在服务端下线——112.67.255.199 与 183.131.62.41 两台 IT之家 服务器
-#      对 Host: napi.ithome.com 一律回 404，只有 api.ithome.com 才有 200；
-#   2) 真实 CDN 节点 175.12.90.41 的 443 被校园网按 CDN 段屏蔽（80 秒连、443 超时），
-#      所以「指回真实解析」也救不了，覆盖本身已无收益；
-#   3) 实机上的该条覆盖已删除，重跑 43 不应再种回去。
-FORCE_DOMAIN = os.environ.get("K2P_FORCE_DOMAIN", "")
-FORCE_IP = os.environ.get("K2P_FORCE_IP", "")
+# 2026-10-24 实测结论（当天早些时候曾误判为「域名已下线」，这里留档避免重犯）：
+#   1) napi.ithome.com 一直存在，公共 DNS 解析到 175.12.90.41（移动 CDN 节点）；
+#   2) 该 IP 只有 443 被校园网出口掐断（80 秒连、ICMP 通），于是 App 连不上、
+#      而网页/小程序走 m/www/api 三个域名，全都正常；
+#   3) 换「用谁的 DNS」会调度到不同节点：学校下发 DNS(172.16.2.1) 给出
+#      119.188.212.41，这台从校园网完全可达，配置后 App 立即恢复；
+#   4) 判断节点是否正常不能只看 404——正常节点访问 / 也回 404（App 用具体 API 路径），
+#      只有「手机流量下实测能刷」才算通过。
+FORCE_DOMAIN = os.environ.get("K2P_FORCE_DOMAIN", "napi.ithome.com")
+FORCE_IP = os.environ.get("K2P_FORCE_IP", "119.188.212.41")

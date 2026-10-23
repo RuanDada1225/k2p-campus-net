@@ -47,10 +47,10 @@ d) 可选：按域名强制覆盖 CDN 节点（K2P_FORCE_DOMAIN / K2P_FORCE_IP�
     export CAMPUS_DOMAINS='example.edu.cn chinatelecom.com'
     export CAMPUS_DNS='172.16.0.1'
     export DNS_CACHESIZE=4000
-    # 按域名强制覆盖 CDN 节点（兜底手段，仅在「解析到坏 IP」时才有意义）
-    # 注意：这两个都必须非空才会生效；留空 = 保持现有覆盖不动
-    # 曾经的默认值 napi.ithome.com -> 183.131.62.41 已于 2026-10-24 失效并删除
-    export K2P_FORCE_DOMAIN='' K2P_FORCE_IP=''
+    # 按域名强制覆盖 CDN 节点（兜底手段）。典型场景：公共 DNS 把域名调度到一个
+    # 校园网不可达的 CDN 节点，而学校 DNS 给出的节点恰好可达（见 03 篇坑 21）。
+    # 两个都非空才生效；留空 = 保持路由器上现有覆盖不动。
+    export K2P_FORCE_DOMAIN='napi.ithome.com' K2P_FORCE_IP='119.188.212.41'
 """
 
 import os

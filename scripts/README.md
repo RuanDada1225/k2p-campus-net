@@ -101,4 +101,18 @@ export K2P_LAN_SUBNET=192.168.1.0/24
   详见 `common/target.py` 注释）；`91` 相应两项检查因 `FORCE_DOMAIN` 默认值清空而自动跳过。
 - `/etc/config/esurfingclient.1.logout` 是 JSON 而非 uci 格式，放在 `/etc/config/` 下会让
   每条 `uci` 命令在 stderr 吐一句 `Parse error (invalid command) at line 1`，属已知噪音，可忽略。
+- **同一个域名，换「用谁的 DNS 解析」会落到不同 CDN 节点**（2026-10-24 实测，比坑 21 更具体）：
+  `napi.ithome.com` 走公共 DNS（202.96.128.86 / 223.5.5.5 / 114 / 8.8.8.8）一致得到
+  `175.12.90.41`（移动节点），该 IP **只有 443 被校园网出口掐断**（80 秒连、ICMP 通）；
+  走学校下发 DNS（`172.16.2.1`）得到 `119.188.212.41`，从校园网完全可达，配置后 App 立刻恢复。
+  所以「公共 DNS 比学校 DNS 好」只在 CDN 就近性上成立——一旦节点被出口过滤，就要换学校 DNS
+  的调度结果再试。排查动作：`nslookup <域名> 202.96.128.86` 与 `nslookup <域名> 172.16.2.1` 对比。
+- **判断 CDN 节点「是否正常」不能只看 HTTP 404**：IT之家 的正常节点访问 `/` 同样回 404
+  （App 用的是具体 API 路径），当时据此误判成「域名已下线」。可靠判据只有两条：
+  TCP 443 能否建连；以及手机流量下实测能否刷出内容。
+- 实机另加了一条兜底 NAT（改道），因为 iOS 的 DNS 缓存极顽固，重启 App 也不刷新：
+  `dest 175.12.90.41:443 → 119.188.212.41:443`，已落成 uci redirect `napi-ithome-fix`
+  （`src=lan / src_dip=175.12.90.41 / src_dport=443 / dest=wan / dest_ip / dest_port=443`）。
+  有了它，设备连哪个 IP 都会被半路纠正；`fw4 reload` 与重启均保留。
+  节点 IP 若变，用学校 DNS 重查后同时改 `target.py` 与这条 redirect。
 - 这些脚本修改的是路由器**运行时 + 开机脚本**，确保重启后仍然生效。
