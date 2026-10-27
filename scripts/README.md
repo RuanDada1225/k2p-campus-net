@@ -37,6 +37,8 @@ export K2P_LAN_SUBNET=192.168.1.0/24
 | 12 | `45-set-rps-masks.py` | **性能**：RPS 多核分散，反制 packet steering 单核钉死 | —— |
 | 13 | `47-persist-log.sh` | **可观测**：日志落盘 + 启动历史，断电也能事后取证（shell） | —— |
 | 14 | `48-tune-sysctl.sh` | **性能**：五个内核调优项一次写全并逐项回读校验（shell，幂等，先备份） | —— |
+| 14b | `49-trim-idle-services.py` | **省资源**：关掉每分钟的 cron 播报、卸载统计面板（collectd 全家）、停用空转的 odhcpd、修无线的 `network` 绑定 | 步骤 10、13 完成 |
+| 14d | `73-github-dns-override.py` | **可用性**：GitHub 全域名 DNS 覆盖（纯 dnsmasq，零证书零进程） | 见下方说明 |
 | 15 | `50-fix-5g-channel.sh` | 5G 固定到非 DFS 信道 149（shell） | —— |
 | 16 | `60-install-extra-apps.sh` | 装 watchcat（断网自愈）/ nlbwmon（可选）并调探测目标（shell） | 已配好软件源 |
 | 17 | `70-set-static-ip.py` | 静态 DHCP 保留，给常用设备固定 IP | —— |
@@ -97,6 +99,56 @@ export K2P_LAN_SUBNET=192.168.1.0/24
   严格模式（1）有误杀风险；实测改后 `Ip: InDiscards` 仍为 0，未丢任何正常流量。
 - `system.conloglevel` 已由 8 降为 4。它走 `/etc/init.d/system` 的 `dmesg -n`，
   **只影响内核消息是否写串口（ttyS0）**，不改变 `/etc/log/messages` 的落盘量。
+- **`system.cronloglevel` 的语义与直觉相反**（2026-10-24 在 BusyBox v1.37.0 上逐级实测）：
+  `9` = 完全静音（连 `crond started` 都不写）、`8` = 每条作业一行、
+  `7 及以下越低越啰嗦`（`0` 会把 `file root:` / `line …` / `job: 0 …` / `child running …`
+  全打开，实测一轮作业写 14 行）。**作业播报无法单独关掉，只能全关或全开**；
+  原先设备上是 `7`，watchdog 每分钟一轮就写一条，占掉 ring buffer 里 1397/4169 行（≈1/3）。
+  现由 `49-trim-idle-services.py` 设为 `9`。代价是 **cron 自己的报错也不再写 syslog**
+  （crontab 语法错、命令执行失败），所以怀疑 watchdog 停了要去查
+  `/etc/crontabs/root` 与 `/tmp/esurfing-watchdog.log`，而不是看日志。
+  已实测确认：静音后作业**照常执行**（临时打点任务按时写文件），只是不再播报。
+- `49-trim-idle-services.py` 另外做了三件事：
+  1. **整包卸载 LuCI「统计」面板**（`luci-app-statistics` + `luci-i18n-statistics-zh-cn`
+     + `collectd` + 全部 `collectd-mod-*` + `rrdtool1`，固件是 OpenWrt 25.x，用 `apk del`，
+     连孤儿依赖 `librrd1` / `libltdl7` 一起清）。看着好看但没人看，白占 RSS ~2MB
+     和内存盘里 472KB 的 `/tmp/rrd`；卸载后 overlay 可用空间 +460KB。
+     **它是唯一需要联网取包才能恢复的改动**：`apk add luci-app-statistics`（见 `docs/04` §4.8）。
+     只卸载不删 `/etc/config/luci_statistics`（apk 默认保留配置），旧设置已另存 `.bak.<ts>`。
+  2. 停用空转的 `odhcpd`（`43` 号已把 `dhcp.lan.ra/dhcpv6/ndp` 全设 `disabled`）。
+  3. 把无线的 `network 'lan wan wan6'` 收敛为 `'lan'` —— `wan6` 在运行期根本不存在
+     （`ifstatus wan6` → `Interface wan6 not found`），实测两路 AP 一直只挂在 `br-lan`。
+  合计释放约 2.7MB 内存（MemAvailable 28.7MB → 31.4MB）+ 460KB overlay。
+- **Steam 社区这条路已评估并放弃**（2026-10-25 撤除，脚本与服务均已删除；
+  日常改为在 PC 上直接用 Steam++）。留档是为了避免以后重复研究：
+  - 三种病因实测分清：`community.steamstatic.com` / `avatars.steamstatic.com` 只是
+    DNS 指到不可达的 Fastly 节点（换 Akamai 节点即可，**免证书**）；
+    `steamcommunity.com` 是 **SNI 阻断**（同一 IP 换 `SNI=www.qq.com` 立刻握手成功，
+    带 `Host: steamcommunity.com` 就返回真页面）；`github.com` / `discord.com` 是
+    **IP 层封锁**，换 SNI 无效，怎么都救不了。
+  - 实测排除：学校不给 IPv6（`wan6` 启用后 `odhcp6c` 跑起来但拿不到全局地址）；
+    拆 TCP 段 / 加延迟 / 乱序 / 逐字节 / 拆 TLS record **全部被 RST**，
+    说明这条线路的 DPI 做了完整流重组，「不改 SNI 绕过」一律无效。
+  - 日后若重做，只剩两条路：路由器自建 MITM（stunnel + 自签 CA，**每台客户端装证书**），
+    或买一台境外 VPS 做透明代理（不用证书但要钱）。
+- **GitHub 不是「IP 层封锁」，是「DNS 污染 + 部分 IP 被过滤」**（2026-10-27 实测，
+  关闭 Steam++ 后从同一个出口验证）：
+  - `nslookup github.com` 会同时返回真实 IP 和假 IP —— `205.251.x.x` 是 AWS Route53
+    的地址、`198.51.44.x` 是异常段，而**真 IP 里 `20.205.243.166` 恰好连不上**，
+    客户端挑中它就超时（表现就是「偶尔能开、多数超时」）。
+  - 逐个 IP 直连：`140.82.114.3` **200 / 2.9s**（最快）、`20.27.177.113` 200 / 7.4s、
+    `4.237.22.38` 200 / 7.1s、`20.205.243.166` **超时**。换成可达 IP 后
+    `github.com/torvalds/linux` 直接 **200 / 330KB**，头像 282KB、raw 6034 字节均正常。
+  - **路由器自己 `uclient-fetch` 仍然失败（rc=4），但这是 mbedtls 与 GitHub 握手不兼容，
+    不影响客户端** —— 手机/电脑是端到端 TLS，路由器只做 NAT，不参与握手。
+    所以路由器唯一要做的就是**把域名解析到可达 IP**。
+  - **`dnsmasq` 的 `address=` 不轮询**：一条里写多个 IP，实测连查三次都只返回第一个。
+    所以每条只配一个可达 IP，失效时按 `73` 号脚本里的 `SPARE_IPS` 表改常量重跑。
+  - **两个必踩的坑**：① 覆盖后客户端仍走 IPv6 导致超时，是 **Windows DNS 缓存里残留的
+    旧 AAAA**，`ipconfig /flushdns` 后立刻正常（`filter_aaaa=1` 已在 `43` 号设过，
+    DNS 层不返回 AAAA）；② `raw.githubusercontent.com` 的 4 个 IP 可达性**会动态变化**
+    （一小时前 108/110 通、109 不通，再测变成 109 通、108/110 不通），
+    这就是「GitHub 时好时坏」的真正原因，不是线路故障。
 - `napi.ithome.com -> 183.131.62.41` 的域名覆盖已删除（该 API 域名服务端下线，
   详见 `common/target.py` 注释）；`91` 相应两项检查因 `FORCE_DOMAIN` 默认值清空而自动跳过。
 - `/etc/config/esurfingclient.1.logout` 是 JSON 而非 uci 格式，放在 `/etc/config/` 下会让
